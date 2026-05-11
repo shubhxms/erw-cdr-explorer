@@ -8,6 +8,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { useManifest } from "../data/manifest";
 import { useStore } from "../store";
 import type { Stage } from "../dag/nodes";
+import { STAGE_COLOR } from "./stageColor";
 
 export interface CheckpointNodeData extends Record<string, unknown> {
   id: string;
@@ -15,16 +16,6 @@ export interface CheckpointNodeData extends Record<string, unknown> {
   stage: Stage;
   description?: string;
 }
-
-const STAGE_COLOR: Record<Stage, string> = {
-  inputs: "#5b8def",
-  cleaning: "#8a92a6",
-  bootstrap: "#33aa66",
-  chain_deployment: "#cc6633",
-  chain_treatment: "#996644",
-  diagnostics: "#aa88aa",
-  aggregation: "#aa9a33",
-};
 
 function Sparkline({ bins }: { bins: number[] }) {
   const w = 200;
@@ -88,6 +79,7 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
         fontSize: 11,
         boxSizing: "border-box",
         cursor: "pointer",
+        transition: "opacity 120ms ease",
       }}
     >
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
