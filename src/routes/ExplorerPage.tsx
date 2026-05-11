@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { Graph } from "../canvas/Graph";
 import { Sidebar } from "../components/Sidebar";
+import { ConstantsButton } from "../components/ConstantsPanel";
 import { useStore } from "../store";
 import { useManifest } from "../data/manifest";
 
@@ -51,6 +52,7 @@ export function ExplorerPage() {
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <ConstantsButton />
           <RunControls />
           <P16Readout />
           <Link to="/about" style={{ color: "#666" }}>
@@ -78,9 +80,12 @@ function RunControls() {
   const computedSet = useStore((s) => s.computedSet);
   const runDurationMs = useStore((s) => s.runDurationMs);
   const runError = useStore((s) => s.runError);
+  const editCount = useStore((s) => s.edits.size);
+  const overrideCount = useStore((s) => s.overrides.size);
 
   const isBusy = runStatus === "running" || runStatus === "loading";
   const progress = runStatus === "running" ? computedSet.size : null;
+  const totalEdits = editCount + overrideCount;
   const phaseLabel = runPhase
     ? {
         "loading-pyodide": "loading pyodide…",
@@ -128,14 +133,19 @@ function RunControls() {
           style={{
             fontSize: 12,
             padding: "3px 10px",
-            background: "#1850c8",
+            background: totalEdits > 0 ? "#a4570e" : "#1850c8",
             color: "#fff",
             border: "none",
             borderRadius: 3,
             cursor: "pointer",
+            fontWeight: totalEdits > 0 ? 600 : 400,
           }}
         >
-          {runStatus === "done" ? "run again" : "recompute chain"}
+          {totalEdits > 0
+            ? `run with ${totalEdits} edit${totalEdits === 1 ? "" : "s"}`
+            : runStatus === "done"
+              ? "run again"
+              : "recompute chain"}
         </button>
       ) : (
         <button

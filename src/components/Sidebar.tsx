@@ -6,6 +6,7 @@ import { loadArrayColumn } from "../data/loadParquet";
 import { Histogram } from "./Histogram";
 import { StatsTable } from "./StatsTable";
 import { ResizeHandle } from "./ResizeHandle";
+import { S1EditPanel } from "./S1EditPanel";
 import type { ArrayStats, Hist } from "../types/computed";
 
 const SIDEBAR_MIN = 320;
@@ -155,6 +156,7 @@ function NodeViewWrapper(props: {
           )}
         </>
       )}
+      <S1EditPanel nodeId={id} />
     </div>
   );
 }
