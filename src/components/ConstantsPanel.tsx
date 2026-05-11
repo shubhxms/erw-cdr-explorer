@@ -27,8 +27,8 @@ export function ConstantsButton() {
         setOpen(false);
       }
     }
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
+    document.addEventListener("pointerdown", onClick, true);
+    return () => document.removeEventListener("pointerdown", onClick, true);
   }, [open]);
 
   return (

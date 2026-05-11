@@ -75,9 +75,9 @@ function AreaEdits() {
   const setEdit = useStore((s) => s.setEdit);
   const clearEdit = useStore((s) => s.clearEdit);
   return (
-    <PanelShell title="edit areas (causal)">
+    <PanelShell title="Edit Plot Areas">
       <div style={{ fontSize: 11, color: "#666", marginBottom: 8 }}>
-        Area scales the per-plot CO₂ tonnes linearly. Control has no effect on p16.
+        Area scales CO₂ tonnes linearly. Control area does not affect the final p16.
       </div>
       {PLOT_TYPES.map((plot) => {
         const k = `inputs/area_hectares|${plot}`;
@@ -128,10 +128,9 @@ function ColumnTransformPanel({
   columns: readonly { key: string; label: string }[];
 }) {
   return (
-    <PanelShell title="edit columns (causal)">
+    <PanelShell title="Edit Columns">
       <div style={{ fontSize: 11, color: "#666", marginBottom: 8 }}>
-        Apply a transform to a column. Re-bootstrap propagates the new values
-        through every downstream node.
+        Transform a column before re-bootstrapping. Changes propagate to all downstream nodes.
       </div>
       {columns.map((c) => (
         <ColumnTransformRow key={c.key} nodeId={nodeId} columnKey={c.key} label={c.label} />

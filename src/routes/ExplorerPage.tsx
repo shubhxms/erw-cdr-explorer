@@ -46,9 +46,9 @@ export function ExplorerPage() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <strong>EW CDR Checkpoint Explorer</strong>
-          <span style={{ color: "#888" }}>
-            Alt Carbon · Darjeeling · Isometric registry
+          <strong style={{ fontSize: 14 }}>EW CDR Explorer</strong>
+          <span style={{ color: "#888", fontSize: 12 }}>
+            Alt Carbon · Darjeeling
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -82,10 +82,12 @@ function RunControls() {
   const runError = useStore((s) => s.runError);
   const editCount = useStore((s) => s.edits.size);
   const overrideCount = useStore((s) => s.overrides.size);
+  const dirtySet = useStore((s) => s.dirtySet);
 
   const isBusy = runStatus === "running" || runStatus === "loading";
   const progress = runStatus === "running" ? computedSet.size : null;
   const totalEdits = editCount + overrideCount;
+  const skipCount = runStatus === "running" ? 55 - dirtySet.size : 0;
   const phaseLabel = runPhase
     ? {
         "loading-pyodide": "loading pyodide…",
@@ -142,10 +144,10 @@ function RunControls() {
           }}
         >
           {totalEdits > 0
-            ? `run with ${totalEdits} edit${totalEdits === 1 ? "" : "s"}`
+            ? `recompute (${totalEdits} change${totalEdits === 1 ? "" : "s"})`
             : runStatus === "done"
-              ? "run again"
-              : "recompute chain"}
+              ? "recompute"
+              : "run chain"}
         </button>
       ) : (
         <button
@@ -176,7 +178,7 @@ function RunControls() {
             minWidth: 60,
           }}
         >
-          {progress} nodes
+          {progress} nodes{skipCount > 0 ? ` · ${skipCount} cached` : ""}
         </span>
       )}
       {runStatus === "done" && runDurationMs !== null && (
@@ -226,39 +228,14 @@ function P16Readout() {
       : null;
   const delta = compared !== null ? (compared - reg) : null;
   const tolPct = compared !== null && reg !== 0 ? Math.abs(delta! / reg) * 100 : null;
-  const ok = tolPct !== null && tolPct < 2; // 2% tolerance for in-browser runs
   return (
     <span style={{ fontVariantNumeric: "tabular-nums" }}>
       p16 = <strong>{display}</strong>
       <span style={{ color: "#888" }}> / registry {reg}</span>
       {compared !== null && (
-        <>
-          <span style={{ marginLeft: 6, color: "#666" }}>
-            Δ {delta! >= 0 ? "+" : ""}
-            {delta!.toFixed(1)} ({tolPct!.toFixed(2)}%)
-          </span>
-          <span
-            style={{
-              marginLeft: 6,
-              color: ok ? "#0a0" : "#a00",
-              fontWeight: 700,
-            }}
-          >
-            {ok ? "✓" : "✗"}
-          </span>
-        </>
-      )}
-      {showRecomputed && (
-        <span
-          style={{
-            marginLeft: 6,
-            fontSize: 10,
-            color: "#1850c8",
-            textTransform: "uppercase",
-            letterSpacing: 0.4,
-          }}
-        >
-          recomputed
+        <span style={{ marginLeft: 6, color: "#666" }}>
+          Δ {delta! >= 0 ? "+" : ""}
+          {delta!.toFixed(1)} ({tolPct!.toFixed(2)}%)
         </span>
       )}
     </span>

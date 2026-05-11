@@ -63,7 +63,7 @@ export function Legend() {
         </svg>
         <span>feeds p16</span>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
         <svg width={22} height={6}>
           <line
             x1="0"
@@ -76,6 +76,27 @@ export function Legend() {
           />
         </svg>
         <span>diagnostic only</span>
+      </div>
+      <div style={{ color: "#888", margin: "8px 0 4px" }}>when highlighted</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+        <svg width={22} height={6}>
+          <line x1="0" y1="3" x2="22" y2="3" stroke="#1850c8" strokeWidth="1.8" />
+        </svg>
+        <span>main (animated)</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <svg width={22} height={6}>
+          <line
+            x1="0"
+            y1="3"
+            x2="22"
+            y2="3"
+            stroke="#7a4fb1"
+            strokeWidth="1.8"
+            strokeDasharray="6 4"
+          />
+        </svg>
+        <span>diagnostic (dashed)</span>
       </div>
     </div>
   );

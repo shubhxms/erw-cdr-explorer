@@ -27,6 +27,7 @@ export type WorkerInbound =
       seed: number;
       edits?: EditSpec[];
       overrides?: OverrideSpec[];
+      skipNodeIds?: string[];
     }
   | { type: "abort" };
 
@@ -40,9 +41,10 @@ export type WorkerOutbound =
       histogram: Hist;
       durationMs: number;
       overridden?: boolean;
+      cached?: boolean;
     }
-  | { type: "scalar"; nodeId: string; value: number; durationMs: number }
-  | { type: "dataframe"; nodeId: string; rowCount: number; columns: string[]; durationMs: number }
+  | { type: "scalar"; nodeId: string; value: number; durationMs: number; cached?: boolean }
+  | { type: "dataframe"; nodeId: string; rowCount: number; columns: string[]; durationMs: number; cached?: boolean }
   | { type: "complete"; p16: number; totalMs: number }
   | { type: "error"; message: string };
 
@@ -151,6 +153,7 @@ async function run(
   seed: number,
   edits: EditSpec[],
   overrides: OverrideSpec[],
+  skipNodeIds: string[],
 ) {
   abortFlag = false;
   try {
@@ -162,6 +165,7 @@ async function run(
     pyodide.globals.set("SEED", seed);
     pyodide.globals.set("EDITS_JSON", JSON.stringify(edits));
     pyodide.globals.set("OVERRIDES_JSON", JSON.stringify(overrides));
+    pyodide.globals.set("SKIP_NODE_IDS_JSON", JSON.stringify(skipNodeIds));
     pyodide.FS.writeFile("/chain.py", chainPySrc);
     await pyodide.runPythonAsync(`
 import importlib, sys
@@ -169,7 +173,7 @@ if "chain" in sys.modules:
     del sys.modules["chain"]
 sys.path.insert(0, "/")
 import chain
-chain.main(N_RUNS, SEED, EDITS_JSON, OVERRIDES_JSON)
+chain.main(N_RUNS, SEED, EDITS_JSON, OVERRIDES_JSON, SKIP_NODE_IDS_JSON)
 `);
   } catch (e) {
     if (!abortFlag) {
@@ -193,6 +197,6 @@ ctx.addEventListener("message", (e: MessageEvent<WorkerInbound>) => {
     return;
   }
   if (msg.type === "run") {
-    void run(msg.nRuns, msg.seed, msg.edits ?? [], msg.overrides ?? []);
+    void run(msg.nRuns, msg.seed, msg.edits ?? [], msg.overrides ?? [], msg.skipNodeIds ?? []);
   }
 });

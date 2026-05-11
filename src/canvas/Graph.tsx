@@ -46,6 +46,8 @@ export function Graph() {
       const isSelectedEdge =
         sel.kind === "edge" && sel.edgeFrom === e.source && sel.edgeTo === e.target;
       const baseStyle = e.style ?? {};
+      const isDiag =
+        (baseStyle as { strokeDasharray?: string }).strokeDasharray !== undefined;
       if (!hl) {
         return { ...e, style: { ...baseStyle, opacity: 0.85 } };
       }
@@ -53,17 +55,15 @@ export function Graph() {
       if (!both) {
         return { ...e, style: { ...baseStyle, opacity: 0.04 } };
       }
-      // edge inside the cone
-      const isDiag =
-        (baseStyle as { strokeDasharray?: string }).strokeDasharray !== undefined;
       return {
         ...e,
-        animated: true,
+        animated: !isDiag,
         style: {
           ...baseStyle,
           opacity: 1,
           stroke: isSelectedEdge ? "#111" : isDiag ? "#7a4fb1" : "#1850c8",
           strokeWidth: isSelectedEdge ? 2.4 : 1.8,
+          strokeDasharray: isDiag ? "6 4" : undefined,
         },
       };
     });

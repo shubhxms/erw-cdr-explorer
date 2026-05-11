@@ -63,6 +63,7 @@ export function Sidebar() {
           id={selectedId}
           label={node?.label ?? selectedId}
           description={node?.description}
+          unit={node?.unit}
           entry={entry}
           chartWidth={chartWidth}
         />
@@ -74,10 +75,10 @@ export function Sidebar() {
 function EmptyState() {
   return (
     <div style={{ color: "#888" }}>
-      <p style={{ marginTop: 0 }}>Click any node to inspect.</p>
+      <p style={{ marginTop: 0 }}>Select a node to inspect its distribution and stats.</p>
       <p>
-        Each node corresponds to a named variable in <code>run_chain.py</code>.
-        Arrays of length N=200,000 are bootstrap distributions.
+        Each node is a named intermediate in the CDR calculation chain.
+        Arrays marked <code>[N]</code> are bootstrap distributions.
       </p>
     </div>
   );
@@ -87,10 +88,11 @@ function NodeViewWrapper(props: {
   id: string;
   label: string;
   description?: string;
+  unit?: string;
   entry: ManifestEntry;
   chartWidth: number;
 }) {
-  const { id, label, description, entry, chartWidth } = props;
+  const { id, label, description, unit, entry, chartWidth } = props;
   const runStatus = useStore((s) => s.runStatus);
   const computedSet = useStore((s) => s.computedSet);
   const currentlyComputing = useStore((s) => s.currentlyComputing);
@@ -104,11 +106,9 @@ function NodeViewWrapper(props: {
         {entry.stage} · {entry.kind}
       </div>
       <h2 style={{ margin: "4px 0 8px", fontSize: 16 }}>{label}</h2>
-      {description && <p style={{ marginTop: 0, color: "#444" }}>{description}</p>}
-      <div style={{ fontSize: 11, color: "#888", marginBottom: 12 }}>
+      {description && <p style={{ marginTop: 0, color: "#444", fontSize: 12, lineHeight: 1.45 }}>{description}</p>}
+      <div style={{ fontSize: 10, color: "#aaa", marginBottom: 12 }}>
         <code>{id}</code>
-        <br />
-        <code>{entry.path}</code>
       </div>
 
       {!isComputed ? (
@@ -118,6 +118,7 @@ function NodeViewWrapper(props: {
           {entry.kind === "scalar" && (
             <ScalarView
               entry={entry}
+              unit={unit}
               computed={
                 computedValue?.kind === "scalar"
                   ? { value: computedValue.value, durationMs: computedValue.durationMs }
@@ -158,7 +159,7 @@ function NodeViewWrapper(props: {
         </>
       )}
       <S1EditPanel nodeId={id} />
-      {entry.kind === "array" && (
+      {entry.kind === "array" && id !== "aggregation/total_co2_tonnes" && (
         <OverridePanel
           nodeId={id}
           meanHint={
@@ -225,19 +226,21 @@ function UnderComputationView({
 function ScalarView({
   entry,
   computed,
+  unit,
 }: {
   entry: ManifestEntry;
   computed?: { value: number; durationMs: number };
+  unit?: string;
 }) {
   const value = computed?.value ?? entry.value;
   return (
     <div>
       <div style={{ fontSize: 24, fontVariantNumeric: "tabular-nums", padding: "8px 0" }}>
-        {value !== undefined ? value.toLocaleString() : "—"}
+        {value !== undefined ? value.toLocaleString() : "—"}{unit ? <span style={{ fontSize: 14, color: "#888", marginLeft: 4 }}>{unit}</span> : null}
       </div>
       {computed && (
         <div style={{ fontSize: 10, color: "#888" }}>
-          computed in {computed.durationMs.toFixed(1)} ms · this browser
+          computed in {computed.durationMs.toFixed(1)} ms
         </div>
       )}
     </div>
@@ -261,6 +264,16 @@ function ArrayView({
   const [diskBins, setDiskBins] = useState<number[] | null>(null);
   const [diskLoadingMs, setDiskLoadingMs] = useState<number | null>(null);
   const [diskLoaded, setDiskLoaded] = useState(false);
+
+  // "original" here always means the manifest's registry-aligned baseline
+  // — the value that's published by Isometric / matches the run_chain.py
+  // run at N=200k. It is NOT the previous run's value (which would drift
+  // across iterations and confuse the comparison).
+  const dirtySet = useStore((s) => s.dirtySet);
+  const nodeId = entry.id;
+  const isDirty = dirtySet.has(nodeId);
+  const originalHist = entry.histogram;
+  const originalStats = entry.stats;
 
   useEffect(() => {
     if (computed || !entry.column) return;
@@ -300,17 +313,56 @@ function ArrayView({
 
   return (
     <div>
-      <Histogram
-        bins={bins}
-        edges={edges}
-        width={chartWidth}
-        height={Math.round(chartWidth * 0.55)}
-        label={label}
-      />
+      <div style={{ marginBottom: 4 }}>
+        <div
+          style={{
+            fontSize: 10,
+            color: "#1850c8",
+            marginBottom: 2,
+            fontWeight: 700,
+            letterSpacing: 0.3,
+          }}
+        >
+          CURRENT
+        </div>
+        <Histogram
+          bins={bins}
+          edges={edges}
+          width={chartWidth}
+          height={Math.round(chartWidth * 0.5)}
+          label={label}
+          barColor="rgba(24,80,200,0.45)"
+        />
+      </div>
+      {isDirty && originalHist && (
+        <div style={{ marginBottom: 4 }}>
+          <div
+            style={{
+              fontSize: 10,
+              color: "#888",
+              marginBottom: 2,
+              fontWeight: 700,
+              letterSpacing: 0.3,
+            }}
+          >
+            ORIGINAL <span style={{ fontWeight: 400 }}>· registry baseline</span>
+          </div>
+          <Histogram
+            bins={originalHist.bins}
+            edges={originalHist.edges}
+            width={chartWidth}
+            height={Math.round(chartWidth * 0.35)}
+            label={`${label} (original)`}
+            barColor="rgba(160,160,160,0.45)"
+          />
+        </div>
+      )}
       <div style={{ fontSize: 10, color: "#888", margin: "4px 0 12px" }}>
         {provenance}
       </div>
-      {stats && <StatsTable stats={stats} />}
+      {stats && (
+        <StatsTable stats={stats} previous={isDirty ? originalStats : undefined} />
+      )}
     </div>
   );
 }

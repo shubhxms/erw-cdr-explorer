@@ -7,8 +7,8 @@ interface Props {
   edges: number[];
   width?: number;
   height?: number;
-  /** Human-readable name of the variable being plotted; shown in tooltip. */
   label?: string;
+  barColor?: string;
 }
 
 interface CursorState {
@@ -34,6 +34,7 @@ export function Histogram({
   width = 320,
   height = 180,
   label = "value",
+  barColor,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
@@ -77,8 +78,8 @@ export function Histogram({
       series: [
         {},
         {
-          stroke: "#333",
-          fill: "rgba(80,80,80,0.6)",
+          stroke: barColor ? barColor.replace(/[\d.]+\)$/, "1)") : "#333",
+          fill: barColor ?? "rgba(80,80,80,0.6)",
           paths: uPlot.paths!.bars!({ size: [0.95, Infinity] }),
           points: { show: false },
         },

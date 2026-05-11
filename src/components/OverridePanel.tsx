@@ -82,9 +82,9 @@ export function OverridePanel({ nodeId, meanHint }: Props) {
           lineHeight: 1.4,
         }}
       >
-        Pin this node's value. Forward-only: only the {descendants.length}{" "}
-        downstream nodes will see this override. Upstream and sibling
-        consumers of upstream nodes will <strong>not</strong> change.
+        Pin this node to a chosen value. Only the {descendants.length}{" "}
+        downstream node{descendants.length === 1 ? "" : "s"} will see the change
+        — upstream and sibling branches remain unaffected.
       </p>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -179,8 +179,7 @@ export function OverridePanel({ nodeId, meanHint }: Props) {
               : `mean-shift(${current.target_mean})`}
           </strong>
           <br />
-          downstream cone: {descendants.length} nodes. Click ✎/📌 in
-          EditsPanel to inspect.
+          downstream cone: {descendants.length} node{descendants.length === 1 ? "" : "s"}.
         </div>
       )}
     </div>

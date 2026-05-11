@@ -15,9 +15,10 @@ export interface CheckpointNodeData extends Record<string, unknown> {
   label: string;
   stage: Stage;
   description?: string;
+  unit?: string;
 }
 
-function Sparkline({ bins }: { bins: number[] }) {
+function Sparkline({ bins, color = "#555", opacity = 1 }: { bins: number[]; color?: string; opacity?: number }) {
   const w = 200;
   const h = 22;
   const max = Math.max(1, ...bins);
@@ -33,7 +34,8 @@ function Sparkline({ bins }: { bins: number[] }) {
             y={h - bh}
             width={bw - 0.5}
             height={bh}
-            fill="#555"
+            fill={color}
+            opacity={opacity}
           />
         );
       })}
@@ -61,6 +63,21 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
   });
   const hasOverride = useStore((s) => s.overrides.has(d.id));
   const wasOverridden = useStore((s) => s.overriddenSet.has(d.id));
+
+  // Overlay: previous run's values for nodes that changed.
+  const dirtySet = useStore((s) => s.dirtySet);
+  const previousValues = useStore((s) => s.previousValues);
+  const isDirty = dirtySet.has(d.id);
+  const prevVal = isDirty ? previousValues.get(d.id) : undefined;
+  // Fall back to manifest for "before" state when previousValues is empty (first run).
+  const prevArr = prevVal?.kind === "array" ? prevVal : undefined;
+  const prevHist = prevArr?.histogram ?? (isDirty ? entry?.histogram : undefined);
+  const prevStats = prevArr?.stats ?? (isDirty ? entry?.stats : undefined);
+  const prevScalar = prevVal?.kind === "scalar"
+    ? prevVal.value
+    : isDirty && entry?.kind === "scalar"
+      ? entry.value
+      : undefined;
 
   const isComputed = computedSet.has(d.id);
   const isRunning = runStatus === "running";
@@ -90,8 +107,24 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
       if (isRunning) return "queued";
       return "—";
     }
-    if (typeof liveScalar === "number") return formatNumber(liveScalar);
-    if (liveStats) return `μ=${formatNumber(liveStats.mean)}`;
+    if (typeof liveScalar === "number") {
+      let text = formatNumber(liveScalar);
+      if (d.unit) text += ` ${d.unit}`;
+      if (isDirty && typeof prevScalar === "number") {
+        const delta = liveScalar - prevScalar;
+        text += ` (${delta >= 0 ? "+" : ""}${formatNumber(delta)})`;
+      }
+      return text;
+    }
+    if (liveStats) {
+      let text = `μ=${formatNumber(liveStats.mean)}`;
+      if (d.unit) text += ` ${d.unit}`;
+      if (isDirty && prevStats) {
+        const delta = liveStats.mean - prevStats.mean;
+        text += ` (${delta >= 0 ? "+" : ""}${formatNumber(delta)})`;
+      }
+      return text;
+    }
     if (typeof liveRows === "number") return `${liveRows} rows`;
     return "—";
   })();
@@ -150,7 +183,12 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
           {headline}
         </span>
       </div>
-      <div style={{ height: 24, display: "flex", alignItems: "center" }}>
+      <div style={{ height: 24, display: "flex", alignItems: "center", position: "relative" }}>
+        {showData && isDirty && prevHist && (
+          <div style={{ position: "absolute", inset: 0 }}>
+            <Sparkline bins={prevHist.bins} color="#999" opacity={0.4} />
+          </div>
+        )}
         {showData && liveHist ? (
           <Sparkline bins={liveHist.bins} />
         ) : isComputingNow ? (

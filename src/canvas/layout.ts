@@ -55,7 +55,7 @@ export function computeLayout(): LayoutResult {
       id: n.id,
       type: "checkpoint",
       position: { x: pos.x - NODE_W / 2, y: pos.y - NODE_H / 2 },
-      data: { id: n.id, label: n.label, stage: n.stage, description: n.description },
+      data: { id: n.id, label: n.label, stage: n.stage, description: n.description, unit: n.unit },
       width: NODE_W,
       height: NODE_H,
       selectable: true,
