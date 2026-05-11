@@ -75,18 +75,20 @@ function plotChain(plot: "deployment" | "treatment"): DagEdge[] {
     diag(`${p}/paired`, "diagnostics/significance_test"),
     diag(`${p}/paired`, "diagnostics/representativeness_test"),
     diag(`${p}/paired`, "diagnostics/pairing_report"),
+    // tracer_resolvability uses the per-plot raw baseline tracer values (not bootstrap)
+    diag(`cleaning/${plot}_baseline`, "diagnostics/tracer_resolvability"),
   ];
 }
 
 export const EDGES: DagEdge[] = [
-  // -- inputs → cleaning --
-  main("inputs/raw_samples", "cleaning/cleaning_report"),
-  main("cleaning/cleaning_report", "cleaning/deployment_baseline"),
-  main("cleaning/cleaning_report", "cleaning/deployment_reporting_period"),
-  main("cleaning/cleaning_report", "cleaning/treatment_baseline"),
-  main("cleaning/cleaning_report", "cleaning/treatment_reporting_period"),
-  main("cleaning/cleaning_report", "cleaning/control_baseline"),
-  main("cleaning/cleaning_report", "cleaning/control_reporting_period"),
+  // -- inputs → cleaning (cleaning_report is a sidecar, not a parent) --
+  main("inputs/raw_samples", "cleaning/deployment_baseline"),
+  main("inputs/raw_samples", "cleaning/deployment_reporting_period"),
+  main("inputs/raw_samples", "cleaning/treatment_baseline"),
+  main("inputs/raw_samples", "cleaning/treatment_reporting_period"),
+  main("inputs/raw_samples", "cleaning/control_baseline"),
+  main("inputs/raw_samples", "cleaning/control_reporting_period"),
+  diag("inputs/raw_samples", "cleaning/cleaning_report"),
 
   // -- bulk density bootstrap --
   main("inputs/bulk_density_samples", "bootstrap/bd_boot"),
@@ -100,6 +102,8 @@ export const EDGES: DagEdge[] = [
   main("inputs/feedstock_samples", "bootstrap/fs_ca"),
   main("inputs/feedstock_samples", "bootstrap/fs_mg"),
   diag("inputs/feedstock_samples", "diagnostics/tracer_resolvability"),
+  // significance test uses feedstock cation means directly (run_chain.py:553)
+  diag("inputs/feedstock_samples", "diagnostics/significance_test"),
 
   // -- control bootstrap chain --
   main("cleaning/control_baseline", "bootstrap/control_paired"),
@@ -114,6 +118,8 @@ export const EDGES: DagEdge[] = [
   main("bootstrap/ctl_bl_mass_fraction_mg", "bootstrap/ctl_corr_boot_mass_fraction_mg"),
   main("bootstrap/ctl_rp_mass_fraction_mg", "bootstrap/ctl_corr_boot_mass_fraction_mg"),
   main("bootstrap/ctl_corr_boot_mass_fraction_mg", "bootstrap/ctrl_corr_p50_mass_fraction_mg"),
+  // pairing_report aggregates all three plots
+  diag("bootstrap/control_paired", "diagnostics/pairing_report"),
 
   // -- per-plot chains --
   ...plotChain("deployment"),
