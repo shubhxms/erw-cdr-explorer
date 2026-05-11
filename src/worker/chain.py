@@ -78,6 +78,82 @@ def col(e):
     return f"mass_fraction_{e.lower()}"
 
 
+# -- edits + overrides ------------------------------------------------------
+
+
+def _parse_edits(edits_json):
+    """Group a flat list of EditSpec dicts by node id for easy lookup.
+
+    Returns: {
+        "scalars":  { constant_id -> value },
+        "areas":    { plot_type -> value },
+        "columns":  { (node_id, column) -> {op, value} },
+    }
+    """
+    try:
+        items = json.loads(edits_json) if edits_json else []
+    except Exception:
+        items = []
+    out = {"scalars": {}, "areas": {}, "columns": {}}
+    for e in items:
+        k = e.get("kind")
+        if k == "scalar" or k == "toggle":
+            out["scalars"][e["nodeId"]] = e["value"]
+        elif k == "area":
+            out["areas"][e["plotType"]] = float(e["value"])
+        elif k == "column_transform":
+            out["columns"][(e["nodeId"], e["column"])] = {
+                "op": e["op"],
+                "value": float(e["value"]),
+            }
+    return out
+
+
+def _parse_overrides(overrides_json):
+    """Returns: { node_id -> {kind, value | target_mean} }."""
+    try:
+        items = json.loads(overrides_json) if overrides_json else []
+    except Exception:
+        items = []
+    return {e["nodeId"]: e for e in items}
+
+
+def _apply_column_transform(df, column, op, value):
+    """Return a copy of df with `column` transformed by `op`."""
+    if column not in df.columns:
+        return df
+    out = df.copy()
+    col_vals = out[column]
+    if op == "replace_mean":
+        delta = value - float(col_vals.mean(skipna=True))
+        out[column] = col_vals + delta
+    elif op == "shift_mean":
+        out[column] = col_vals + value
+    elif op == "scale":
+        out[column] = col_vals * value
+    return out
+
+
+def _apply_override(arr, override):
+    """Apply a node override in place semantics: returns a new array.
+
+    - collapse: replace every element with override["value"].
+    - shift:    recenter array on override["target_mean"] (preserve dispersion).
+    """
+    k = override.get("kind")
+    arr = np.asarray(arr, dtype=np.float64)
+    if k == "collapse":
+        return np.full(arr.shape, float(override["value"]), dtype=np.float64)
+    if k == "shift":
+        m = float(np.nanmean(arr))
+        return arr - m + float(override["target_mean"])
+    return arr
+
+
+# Populated at the top of run(); track_array reads from this dict.
+_OVERRIDES = {}
+
+
 # Default chunk for the iteration-axis split below. At chunk_size=20_000 and
 # n_paired ≈ 894 the peak gather buffer is 20k × 894 × 8 ≈ 140 MB, comfortably
 # inside the Pyodide WASM heap (~2 GB usable). At N=200k the chain runs in 10
@@ -194,6 +270,10 @@ def track_array(node_id, fn):
     post({"type": "started", "nodeId": node_id})
     t0 = time.perf_counter()
     arr = fn()
+    overridden = False
+    if node_id in _OVERRIDES:
+        arr = _apply_override(arr, _OVERRIDES[node_id])
+        overridden = True
     dt = (time.perf_counter() - t0) * 1000
     s_h = stats(arr)
     if s_h is None:
@@ -205,7 +285,10 @@ def track_array(node_id, fn):
         h = {"bins": [0] * 64, "edges": [0.0, 1.0]}
     else:
         s, h = s_h
-    post({"type": "array", "nodeId": node_id, "stats": s, "histogram": h, "durationMs": dt})
+    msg = {"type": "array", "nodeId": node_id, "stats": s, "histogram": h, "durationMs": dt}
+    if overridden:
+        msg["overridden"] = True
+    post(msg)
     _check_abort()
     return arr
 
@@ -235,7 +318,25 @@ def track_df(node_id, fn, columns):
 # -- main chain --------------------------------------------------------------
 
 
-def run(n_runs, seed):
+def run(n_runs, seed, edits_json="", overrides_json=""):
+    global _OVERRIDES
+    edits = _parse_edits(edits_json)
+    _OVERRIDES = _parse_overrides(overrides_json)
+
+    # Constants — pick up any scalar/toggle edits.
+    application_rate_kg_ha = float(edits["scalars"].get(
+        "constants/application_rate_kg_ha", APPLICATION_RATE_KG_HA,
+    ))
+    sampling_depth_cm = float(edits["scalars"].get(
+        "constants/sampling_depth_cm", SAMPLING_DEPTH_CM,
+    ))
+    winsorise_n_std = float(edits["scalars"].get(
+        "constants/winsorise_n_std", 3.0,
+    ))
+    zero_filter_enabled = bool(edits["scalars"].get(
+        "constants/zero_filter_enabled", True,
+    ))
+
     overall_t0 = time.perf_counter()
     rng = np.random.default_rng(seed)
 
@@ -244,6 +345,21 @@ def run(n_runs, seed):
     feedstock = pd.read_parquet("/inputs/feedstock_samples.parquet")
     bulk_density_samples = pd.read_parquet("/inputs/bulk_density_samples.parquet")
     area_df = pd.read_parquet("/inputs/area_hectares.parquet")
+
+    # Apply per-column edits to feedstock and bulk-density.
+    for (node_id, column), spec in edits["columns"].items():
+        if node_id == "inputs/feedstock_samples":
+            feedstock = _apply_column_transform(feedstock, column, spec["op"], spec["value"])
+        elif node_id == "inputs/bulk_density_samples":
+            bulk_density_samples = _apply_column_transform(
+                bulk_density_samples, column, spec["op"], spec["value"]
+            )
+
+    # Apply per-plot area edits.
+    if edits["areas"]:
+        area_df = area_df.copy()
+        for plot, value in edits["areas"].items():
+            area_df.loc[area_df["plot_type"] == plot, "area_hectares"] = value
     area = dict(zip(area_df["plot_type"], area_df["area_hectares"]))
 
     track_df("inputs/raw_samples", lambda: raw_samples, raw_samples.columns)
@@ -254,16 +370,22 @@ def run(n_runs, seed):
     # ----- cleaning --------------------------------------------------------
     cleaning_columns = [col(e) for e in CLEANING_ELEMENTS]
 
-    zr = zero_filter(raw_samples, cleaning_columns, LOCATION_COL)
+    if zero_filter_enabled:
+        zr = zero_filter(raw_samples, cleaning_columns, LOCATION_COL)
+        post_zero = zr.samples
+        zero_dropped = zr.n_samples_dropped
+    else:
+        post_zero = raw_samples
+        zero_dropped = 0
     wr = winsorise(
-        zr.samples,
+        post_zero,
         columns=cleaning_columns,
         group_columns=["sampling_event", "plot_type"],
-        n_std=3.0,
+        n_std=winsorise_n_std,
     )
     cleaned = wr.samples
     cleaning_report_df = pd.DataFrame([
-        {"step": "zero_filter", "samples_dropped": zr.n_samples_dropped, "values_clipped": 0},
+        {"step": "zero_filter", "samples_dropped": zero_dropped, "values_clipped": 0},
         {"step": "winsorisation", "samples_dropped": 0, "values_clipped": wr.n_values_clipped},
     ])
     track_df("cleaning/cleaning_report", lambda: cleaning_report_df,
@@ -298,7 +420,7 @@ def run(n_runs, seed):
 
     bd_mean = float(np.mean(bd_values))
     track_scalar("bootstrap/bd_mean", lambda: bd_mean)
-    soil_mass_kg_ha = bd_mean * SAMPLING_DEPTH_CM * 100
+    soil_mass_kg_ha = bd_mean * sampling_depth_cm * 100
     track_scalar("bootstrap/soil_mass_kg_ha", lambda: soil_mass_kg_ha)
 
     # ----- tracer resolvability (diagnostic) -------------------------------
@@ -308,7 +430,7 @@ def run(n_runs, seed):
     for plot_type, plot_baseline in [("deployment", dep_bl), ("treatment", tre_bl)]:
         area_ha = area.get(plot_type, 0.0)
         soil_mass_kg = soil_mass_kg_ha * area_ha
-        feedstock_mass_kg = APPLICATION_RATE_KG_HA * area_ha
+        feedstock_mass_kg = application_rate_kg_ha * area_ha
         bl_tracer = plot_baseline[tracer_col].dropna().to_numpy()
         res = calculate_tracer_resolvability(
             soil_mass_kg=soil_mass_kg,
@@ -452,13 +574,13 @@ def run(n_runs, seed):
             lambda: compute_application_rate_from_tracer(
                 feedstock_soil_mass_ratio=mass_ratio,
                 soil_bulk_density_kg_m3=bd_boot,
-                depth_cm=SAMPLING_DEPTH_CM,
+                depth_cm=sampling_depth_cm,
             ),
         )
         app_rate_check_dfs.append(
             build_application_rate_check(
                 soil_based_application_rate_bootstrap_replicates_kg_ha=app_rate_kg_ha,
-                known_application_rate_kg_ha=APPLICATION_RATE_KG_HA,
+                known_application_rate_kg_ha=application_rate_kg_ha,
                 plot_type=plot_label,
             )
         )
@@ -495,8 +617,8 @@ def run(n_runs, seed):
             )
             cdr_cation_kg_ha = track_array(
                 f"{prefix}/cdr_{cc}_kg_ha",
-                lambda frac_diss=frac_diss, fs=fs_cation:
-                frac_diss * APPLICATION_RATE_KG_HA * fs / 1e6,
+                lambda frac_diss=frac_diss, fs=fs_cation, ar=application_rate_kg_ha:
+                frac_diss * ar * fs / 1e6,
             )
             co2_cation = track_array(
                 f"{prefix}/co2_{cc}_kg_ha",
@@ -539,9 +661,9 @@ def run(n_runs, seed):
             post_app_mg_kg = infer_post_application_concentrations(
                 baseline_concentrations_mg_kg=paired[f"bl_{cc}"].to_numpy(),
                 feedstock_concentration_mg_kg=fs_cation_mean,
-                application_rate_kg_ha=APPLICATION_RATE_KG_HA,
+                application_rate_kg_ha=application_rate_kg_ha,
                 bulk_density_kg_m3=bd_mean,
-                depth_cm=SAMPLING_DEPTH_CM,
+                depth_cm=sampling_depth_cm,
             )
             rp_vals = paired[f"rp_{cc}"].to_numpy()
             result = check_weathering_significance_paired(
@@ -608,9 +730,9 @@ def run(n_runs, seed):
     post({"type": "complete", "p16": p16, "totalMs": total_ms})
 
 
-def main(n_runs, seed):
+def main(n_runs, seed, edits_json="", overrides_json=""):
     try:
-        run(int(n_runs), int(seed))
+        run(int(n_runs), int(seed), edits_json or "", overrides_json or "")
     except RuntimeError as e:
         if str(e) == "aborted":
             return

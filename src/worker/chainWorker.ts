@@ -13,6 +13,7 @@
  */
 
 import type { ArrayStats, Hist } from "../types/computed";
+import type { EditSpec, OverrideSpec } from "../types/edits";
 import chainPySrc from "./chain.py?raw";
 
 const PYODIDE_VERSION = "0.29.4";
@@ -20,13 +21,26 @@ const PYODIDE_CDN = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`
 const LIBRARY_VERSION = "0.21.4";
 
 export type WorkerInbound =
-  | { type: "run"; nRuns: number; seed: number }
+  | {
+      type: "run";
+      nRuns: number;
+      seed: number;
+      edits?: EditSpec[];
+      overrides?: OverrideSpec[];
+    }
   | { type: "abort" };
 
 export type WorkerOutbound =
   | { type: "phase"; phase: "loading-pyodide" | "loading-packages" | "installing-library" | "fetching-inputs" | "running"; message?: string }
   | { type: "started"; nodeId: string }
-  | { type: "array"; nodeId: string; stats: ArrayStats; histogram: Hist; durationMs: number }
+  | {
+      type: "array";
+      nodeId: string;
+      stats: ArrayStats;
+      histogram: Hist;
+      durationMs: number;
+      overridden?: boolean;
+    }
   | { type: "scalar"; nodeId: string; value: number; durationMs: number }
   | { type: "dataframe"; nodeId: string; rowCount: number; columns: string[]; durationMs: number }
   | { type: "complete"; p16: number; totalMs: number }
@@ -132,17 +146,22 @@ async function loadInputs() {
 // Run
 // ---------------------------------------------------------------------------
 
-async function run(nRuns: number, seed: number) {
+async function run(
+  nRuns: number,
+  seed: number,
+  edits: EditSpec[],
+  overrides: OverrideSpec[],
+) {
   abortFlag = false;
   try {
     await ensurePyodide();
     await loadInputs();
     post({ type: "phase", phase: "running" });
 
-    // Push parameters into the Python namespace, define `chain` module, run it.
     pyodide.globals.set("N_RUNS", nRuns);
     pyodide.globals.set("SEED", seed);
-    // Load chain.py as a Python module so functions are available + cached.
+    pyodide.globals.set("EDITS_JSON", JSON.stringify(edits));
+    pyodide.globals.set("OVERRIDES_JSON", JSON.stringify(overrides));
     pyodide.FS.writeFile("/chain.py", chainPySrc);
     await pyodide.runPythonAsync(`
 import importlib, sys
@@ -150,7 +169,7 @@ if "chain" in sys.modules:
     del sys.modules["chain"]
 sys.path.insert(0, "/")
 import chain
-chain.main(N_RUNS, SEED)
+chain.main(N_RUNS, SEED, EDITS_JSON, OVERRIDES_JSON)
 `);
   } catch (e) {
     if (!abortFlag) {
@@ -174,6 +193,6 @@ ctx.addEventListener("message", (e: MessageEvent<WorkerInbound>) => {
     return;
   }
   if (msg.type === "run") {
-    void run(msg.nRuns, msg.seed);
+    void run(msg.nRuns, msg.seed, msg.edits ?? [], msg.overrides ?? []);
   }
 });
