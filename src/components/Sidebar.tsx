@@ -56,7 +56,7 @@ export function Sidebar() {
         <div style={{ color: "#888" }}>No manifest entry for {selectedId}</div>
       )}
       {selectedId && entry && (
-        <NodeView
+        <NodeViewWrapper
           id={selectedId}
           label={node?.label ?? selectedId}
           description={node?.description}
@@ -80,19 +80,20 @@ function EmptyState() {
   );
 }
 
-function NodeView({
-  id,
-  label,
-  description,
-  entry,
-  chartWidth,
-}: {
+function NodeViewWrapper(props: {
   id: string;
   label: string;
   description?: string;
   entry: ManifestEntry;
   chartWidth: number;
 }) {
+  const { id, label, description, entry, chartWidth } = props;
+  const runStatus = useStore((s) => s.runStatus);
+  const computedSet = useStore((s) => s.computedSet);
+  const currentlyComputing = useStore((s) => s.currentlyComputing);
+  const isComputed = computedSet.has(id);
+  const isComputingNow = currentlyComputing === id;
+
   return (
     <div>
       <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 0.5 }}>
@@ -106,11 +107,67 @@ function NodeView({
         <code>{entry.path}</code>
       </div>
 
-      {entry.kind === "scalar" && <ScalarView entry={entry} />}
-      {entry.kind === "array" && (
-        <ArrayView entry={entry} label={label} chartWidth={chartWidth} />
+      {!isComputed ? (
+        <UnderComputationView isComputingNow={isComputingNow} runStatus={runStatus} />
+      ) : (
+        <>
+          {entry.kind === "scalar" && <ScalarView entry={entry} />}
+          {entry.kind === "array" && (
+            <ArrayView entry={entry} label={label} chartWidth={chartWidth} />
+          )}
+          {entry.kind === "dataframe" && <DataframeView entry={entry} />}
+        </>
       )}
-      {entry.kind === "dataframe" && <DataframeView entry={entry} />}
+    </div>
+  );
+}
+
+function UnderComputationView({
+  isComputingNow,
+  runStatus,
+}: {
+  isComputingNow: boolean;
+  runStatus: "idle" | "running" | "done";
+}) {
+  const label = isComputingNow
+    ? "under computation…"
+    : runStatus === "running"
+      ? "queued"
+      : "no data";
+  return (
+    <div
+      style={{
+        padding: "20px 0",
+        color: "#888",
+        textAlign: "center",
+        fontSize: 13,
+        fontStyle: "italic",
+      }}
+    >
+      {label}
+      {isComputingNow && (
+        <div
+          style={{
+            marginTop: 8,
+            height: 4,
+            background: "#e8e8e8",
+            borderRadius: 2,
+            overflow: "hidden",
+            maxWidth: 200,
+            marginInline: "auto",
+          }}
+        >
+          <div
+            style={{
+              width: "40%",
+              height: "100%",
+              background: "#1850c8",
+              borderRadius: 2,
+              animation: "ew-progress 1.1s ease-in-out infinite",
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

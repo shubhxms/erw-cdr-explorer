@@ -36,3 +36,8 @@ code {
     font-size: 9px;
     opacity: 0.5;
 }
+
+@keyframes ew-progress {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(250%); }
+}

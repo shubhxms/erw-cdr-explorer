@@ -47,8 +47,21 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
   const entry = manifest?.entries[d.id];
   const selectedId = useStore((s) => s.selectedId);
   const isSelected = selected || selectedId === d.id;
+  const runStatus = useStore((s) => s.runStatus);
+  const computedSet = useStore((s) => s.computedSet);
+  const currentlyComputing = useStore((s) => s.currentlyComputing);
+
+  const isComputed = computedSet.has(d.id);
+  const isRunning = runStatus === "running";
+  const isComputingNow = currentlyComputing === d.id;
+  const showData = isComputed;
 
   const headline = (() => {
+    if (!showData) {
+      if (isComputingNow) return "computing…";
+      if (isRunning) return "queued";
+      return "—";
+    }
     if (!entry) return "—";
     if (entry.kind === "scalar" && typeof entry.value === "number") {
       return formatNumber(entry.value);
@@ -67,9 +80,13 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
       style={{
         width: 220,
         height: 84,
-        background: "#fff",
-        border: isSelected ? "2px solid #111" : "1px solid #ccc",
-        borderLeft: `4px solid ${STAGE_COLOR[d.stage]}`,
+        background: showData ? "#fff" : "#eee",
+        border: isSelected
+          ? "2px solid #111"
+          : isComputingNow
+            ? `2px solid ${STAGE_COLOR[d.stage]}`
+            : "1px solid #ccc",
+        borderLeft: `4px solid ${showData ? STAGE_COLOR[d.stage] : "#bbb"}`,
         borderRadius: 4,
         padding: "6px 8px",
         display: "flex",
@@ -79,7 +96,10 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
         fontSize: 11,
         boxSizing: "border-box",
         cursor: "pointer",
-        transition: "opacity 120ms ease",
+        transition: "background 160ms ease, border-color 160ms ease",
+        boxShadow: isComputingNow
+          ? `0 0 0 3px ${hexToRgba(STAGE_COLOR[d.stage], 0.2)}`
+          : undefined,
       }}
     >
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
@@ -90,29 +110,74 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
+            color: showData ? "#222" : "#888",
           }}
         >
           {d.label}
         </span>
-        <span style={{ color: "#888", fontVariantNumeric: "tabular-nums" }}>{headline}</span>
+        <span
+          style={{
+            color: isComputingNow ? STAGE_COLOR[d.stage] : "#888",
+            fontVariantNumeric: "tabular-nums",
+            fontWeight: isComputingNow ? 600 : 400,
+          }}
+        >
+          {headline}
+        </span>
       </div>
       <div style={{ height: 24, display: "flex", alignItems: "center" }}>
-        {entry?.histogram ? <Sparkline bins={entry.histogram.bins} /> : null}
+        {showData && entry?.histogram ? (
+          <Sparkline bins={entry.histogram.bins} />
+        ) : isComputingNow ? (
+          <ProgressBar color={STAGE_COLOR[d.stage]} />
+        ) : null}
       </div>
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
-          color: "#888",
+          color: "#aaa",
           fontSize: 10,
         }}
       >
         <span>{d.stage}</span>
-        <span>{entry?.kind ?? ""}</span>
+        <span>{showData ? entry?.kind ?? "" : isRunning ? "—" : ""}</span>
       </div>
       <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
     </div>
   );
+}
+
+function ProgressBar({ color }: { color: string }) {
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: 4,
+        background: "#e8e8e8",
+        borderRadius: 2,
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          width: "40%",
+          height: "100%",
+          background: color,
+          borderRadius: 2,
+          animation: "ew-progress 1.1s ease-in-out infinite",
+        }}
+      />
+    </div>
+  );
+}
+
+function hexToRgba(hex: string, a: number): string {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
 function formatNumber(v: number): string {
