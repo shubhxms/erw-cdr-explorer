@@ -73,7 +73,7 @@ function NodeView({
       </div>
 
       {entry.kind === "scalar" && <ScalarView entry={entry} />}
-      {entry.kind === "array" && <ArrayView entry={entry} />}
+      {entry.kind === "array" && <ArrayView entry={entry} label={label} />}
       {entry.kind === "dataframe" && <DataframeView entry={entry} />}
     </div>
   );
@@ -87,52 +87,46 @@ function ScalarView({ entry }: { entry: ManifestEntry }) {
   );
 }
 
-function ArrayView({ entry }: { entry: ManifestEntry }) {
-  const [loaded, setLoaded] = useState(false);
+function ArrayView({ entry, label }: { entry: ManifestEntry; label: string }) {
   const [chartEdges, setChartEdges] = useState<number[] | null>(null);
   const [chartBins, setChartBins] = useState<number[] | null>(null);
+  const [loadingMs, setLoadingMs] = useState<number | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
-  // Use the manifest's precomputed 32-bin histogram by default; lazy-rebuild a
-  // 64-bin one from the actual array when user expands.
+  // Always load the full array on selection; build a 64-bin histogram from it.
   useEffect(() => {
-    if (!loaded || !entry.column) return;
+    if (!entry.column) return;
     let cancelled = false;
+    setLoaded(false);
+    setChartBins(null);
+    setChartEdges(null);
+    setLoadingMs(null);
+    const t0 = performance.now();
     (async () => {
       const arr = await loadArrayColumn(entry.path, entry.column!);
       if (cancelled) return;
       const { bins, edges } = makeHist(arr, 64);
       setChartBins(bins);
       setChartEdges(edges);
+      setLoadingMs(Math.round(performance.now() - t0));
+      setLoaded(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, [loaded, entry.path, entry.column]);
+  }, [entry.path, entry.column]);
 
+  // While loading, show the 32-bin manifest preview so the panel isn't blank.
   const bins = chartBins ?? entry.histogram?.bins ?? [];
   const edges = chartEdges ?? entry.histogram?.edges ?? [0, 1];
 
   return (
     <div>
-      <Histogram bins={bins} edges={edges} width={320} height={180} />
+      <Histogram bins={bins} edges={edges} width={320} height={180} label={label} />
       <div style={{ fontSize: 10, color: "#888", margin: "4px 0 12px" }}>
-        {loaded ? "64-bin histogram (loaded from parquet)" : "32-bin preview (from manifest)"}
-        {!loaded && (
-          <button
-            type="button"
-            onClick={() => setLoaded(true)}
-            style={{
-              marginLeft: 8,
-              fontSize: 10,
-              padding: "2px 6px",
-              background: "#fff",
-              border: "1px solid #ccc",
-              cursor: "pointer",
-            }}
-          >
-            load full
-          </button>
-        )}
+        {loaded
+          ? `64-bin · ${entry.stats?.n.toLocaleString() ?? "?"} samples · loaded in ${loadingMs} ms`
+          : "loading full array…"}
       </div>
       {entry.stats && <StatsTable stats={entry.stats} />}
     </div>
