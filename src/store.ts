@@ -116,10 +116,13 @@ export const useStore = create<StoreState>((set, get) => ({
   setNRuns: (n) => set({ nRuns: n }),
 
   startRun: () => {
-    worker?.terminate();
-    const w = new ChainWorker();
-    w.addEventListener("message", onWorkerMessage);
-    worker = w;
+    // Keep the worker alive between runs so Pyodide + the library stay
+    // cached. Subsequent runs skip the 5-8s cold start entirely. We only
+    // tear down on explicit cancelRun().
+    if (!worker) {
+      worker = new ChainWorker();
+      worker.addEventListener("message", onWorkerMessage);
+    }
 
     set({
       runStatus: "loading",
@@ -141,7 +144,7 @@ export const useStore = create<StoreState>((set, get) => ({
       edits: [...s.edits.values()],
       overrides: [...s.overrides.values()],
     };
-    w.postMessage(msg);
+    worker.postMessage(msg);
   },
   cancelRun: () => {
     if (worker) {
