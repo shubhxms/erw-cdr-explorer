@@ -1,7 +1,9 @@
 import { create } from "zustand";
 import { coneOf, coneOfEdge } from "./dag/graph";
-import { runChain, type RunHandle, INPUT_IDS } from "./runner";
 import { NODES } from "./dag/nodes";
+import type { ArrayStats, Hist } from "./chain/stats";
+import ChainWorker from "./worker/chainWorker?worker";
+import type { WorkerInbound, WorkerOutbound } from "./worker/chainWorker";
 
 const ALL_IDS: Set<string> = new Set(NODES.map((n) => n.id));
 const allComputed = (): Set<string> => new Set(ALL_IDS);
@@ -13,40 +15,55 @@ export interface Selection {
   edgeTo?: string;
 }
 
-export type RunStatus = "idle" | "running" | "done";
+export type RunStatus = "idle" | "running" | "done" | "error";
+
+export type ComputedValue =
+  | { kind: "array"; stats: ArrayStats; histogram: Hist; durationMs: number }
+  | { kind: "scalar"; value: number; durationMs: number }
+  | { kind: "dataframe"; rowCount: number; columns: string[]; durationMs: number };
 
 interface StoreState {
-  // selection / highlight
   selectedId: string | null;
   selection: Selection;
   highlighted: Set<string> | null;
+
   // run state
   runStatus: RunStatus;
   computedSet: Set<string>;
+  computedValues: Map<string, ComputedValue>;
   currentlyComputing: string | null;
-  speed: number;
-  // actions
+  nRuns: number;
+  seed: number;
+  computedP16: number | null;
+  runDurationMs: number | null;
+  runError: string | null;
+
   setSelected: (id: string | null) => void;
   selectEdge: (from: string, to: string) => void;
   clearSelection: () => void;
+
   startRun: () => void;
   cancelRun: () => void;
-  resetRun: () => void;
-  setSpeed: (s: number) => void;
+  setNRuns: (n: number) => void;
 }
 
-let currentRun: RunHandle | null = null;
+let worker: Worker | null = null;
 
 export const useStore = create<StoreState>((set, get) => ({
   selectedId: null,
   selection: { kind: "none", id: null },
   highlighted: null,
-  // before any run starts, all nodes are considered "computed" — the data is
-  // already on disk. The "Run" button blanks this and replays.
   runStatus: "idle",
+  // before any run, all nodes are "computed" — the precomputed manifest is
+  // what we show by default. Run blanks this.
   computedSet: allComputed(),
+  computedValues: new Map(),
   currentlyComputing: null,
-  speed: 1,
+  nRuns: 10000,
+  seed: 42,
+  computedP16: null,
+  runDurationMs: null,
+  runError: null,
 
   setSelected: (id) =>
     set(
@@ -63,33 +80,111 @@ export const useStore = create<StoreState>((set, get) => ({
   clearSelection: () =>
     set({ selectedId: null, selection: { kind: "none", id: null }, highlighted: null }),
 
+  setNRuns: (n) => set({ nRuns: n }),
+
   startRun: () => {
-    currentRun?.abort();
+    worker?.terminate();
+    const w = new ChainWorker();
+    w.addEventListener("message", onWorkerMessage);
+    worker = w;
+
     set({
       runStatus: "running",
-      computedSet: new Set<string>(INPUT_IDS),
+      computedSet: new Set<string>(),
+      computedValues: new Map(),
       currentlyComputing: null,
+      computedP16: null,
+      runDurationMs: null,
+      runError: null,
     });
-    currentRun = runChain(get().speed, {
-      onStart: (id) => set({ currentlyComputing: id }),
-      onDone: (id) =>
-        set((s) => {
-          const next = new Set(s.computedSet);
-          next.add(id);
-          return { computedSet: next };
-        }),
-      onComplete: () => set({ runStatus: "done", currentlyComputing: null }),
-    });
+
+    const msg: WorkerInbound = { type: "run", nRuns: get().nRuns, seed: get().seed };
+    w.postMessage(msg);
   },
   cancelRun: () => {
-    currentRun?.abort();
-    currentRun = null;
-    set({ runStatus: "idle", computedSet: allComputed(), currentlyComputing: null });
+    if (worker) {
+      const msg: WorkerInbound = { type: "abort" };
+      worker.postMessage(msg);
+      worker.terminate();
+      worker = null;
+    }
+    set({
+      runStatus: "idle",
+      computedSet: allComputed(),
+      computedValues: new Map(),
+      currentlyComputing: null,
+    });
   },
-  resetRun: () => {
-    currentRun?.abort();
-    currentRun = null;
-    set({ runStatus: "idle", computedSet: allComputed(), currentlyComputing: null });
-  },
-  setSpeed: (s) => set({ speed: s }),
 }));
+
+function onWorkerMessage(e: MessageEvent<WorkerOutbound>) {
+  const msg = e.data;
+  switch (msg.type) {
+    case "started": {
+      useStore.setState({ currentlyComputing: msg.nodeId });
+      break;
+    }
+    case "array": {
+      useStore.setState((s) => {
+        const cs = new Set(s.computedSet);
+        cs.add(msg.nodeId);
+        const cv = new Map(s.computedValues);
+        cv.set(msg.nodeId, {
+          kind: "array",
+          stats: msg.stats,
+          histogram: msg.histogram,
+          durationMs: msg.durationMs,
+        });
+        return { computedSet: cs, computedValues: cv };
+      });
+      break;
+    }
+    case "scalar": {
+      useStore.setState((s) => {
+        const cs = new Set(s.computedSet);
+        cs.add(msg.nodeId);
+        const cv = new Map(s.computedValues);
+        cv.set(msg.nodeId, {
+          kind: "scalar",
+          value: msg.value,
+          durationMs: msg.durationMs,
+        });
+        const extras = msg.nodeId === "aggregation/p16" ? { computedP16: msg.value } : {};
+        return { computedSet: cs, computedValues: cv, ...extras };
+      });
+      break;
+    }
+    case "dataframe": {
+      useStore.setState((s) => {
+        const cs = new Set(s.computedSet);
+        cs.add(msg.nodeId);
+        const cv = new Map(s.computedValues);
+        cv.set(msg.nodeId, {
+          kind: "dataframe",
+          rowCount: msg.rowCount,
+          columns: msg.columns,
+          durationMs: msg.durationMs,
+        });
+        return { computedSet: cs, computedValues: cv };
+      });
+      break;
+    }
+    case "complete": {
+      useStore.setState({
+        runStatus: "done",
+        currentlyComputing: null,
+        computedP16: msg.p16,
+        runDurationMs: msg.totalMs,
+      });
+      break;
+    }
+    case "error": {
+      useStore.setState({
+        runStatus: "error",
+        runError: msg.message,
+        currentlyComputing: null,
+      });
+      break;
+    }
+  }
+}

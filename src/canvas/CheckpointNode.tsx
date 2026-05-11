@@ -50,11 +50,29 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
   const runStatus = useStore((s) => s.runStatus);
   const computedSet = useStore((s) => s.computedSet);
   const currentlyComputing = useStore((s) => s.currentlyComputing);
+  const computedValue = useStore((s) => s.computedValues.get(d.id));
 
   const isComputed = computedSet.has(d.id);
   const isRunning = runStatus === "running";
   const isComputingNow = currentlyComputing === d.id;
   const showData = isComputed;
+
+  // Prefer freshly-computed values during/after a run; fall back to manifest.
+  const liveHist =
+    computedValue?.kind === "array" ? computedValue.histogram : entry?.histogram;
+  const liveStats = computedValue?.kind === "array" ? computedValue.stats : entry?.stats;
+  const liveScalar =
+    computedValue?.kind === "scalar"
+      ? computedValue.value
+      : entry?.kind === "scalar"
+        ? entry.value
+        : undefined;
+  const liveRows =
+    computedValue?.kind === "dataframe"
+      ? computedValue.rowCount
+      : entry?.kind === "dataframe"
+        ? entry.row_count
+        : undefined;
 
   const headline = (() => {
     if (!showData) {
@@ -62,16 +80,9 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
       if (isRunning) return "queued";
       return "—";
     }
-    if (!entry) return "—";
-    if (entry.kind === "scalar" && typeof entry.value === "number") {
-      return formatNumber(entry.value);
-    }
-    if (entry.kind === "array" && entry.stats) {
-      return `μ=${formatNumber(entry.stats.mean)}`;
-    }
-    if (entry.kind === "dataframe" && typeof entry.row_count === "number") {
-      return `${entry.row_count} rows`;
-    }
+    if (typeof liveScalar === "number") return formatNumber(liveScalar);
+    if (liveStats) return `μ=${formatNumber(liveStats.mean)}`;
+    if (typeof liveRows === "number") return `${liveRows} rows`;
     return "—";
   })();
 
@@ -126,8 +137,8 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
         </span>
       </div>
       <div style={{ height: 24, display: "flex", alignItems: "center" }}>
-        {showData && entry?.histogram ? (
-          <Sparkline bins={entry.histogram.bins} />
+        {showData && liveHist ? (
+          <Sparkline bins={liveHist.bins} />
         ) : isComputingNow ? (
           <ProgressBar color={STAGE_COLOR[d.stage]} />
         ) : null}
@@ -141,7 +152,13 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
         }}
       >
         <span>{d.stage}</span>
-        <span>{showData ? entry?.kind ?? "" : isRunning ? "—" : ""}</span>
+        <span>
+          {showData
+            ? computedValue?.kind ?? entry?.kind ?? ""
+            : isRunning
+              ? "—"
+              : ""}
+        </span>
       </div>
       <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
     </div>

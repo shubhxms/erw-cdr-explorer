@@ -6,6 +6,7 @@ import { loadArrayColumn } from "../data/loadParquet";
 import { Histogram } from "./Histogram";
 import { StatsTable } from "./StatsTable";
 import { ResizeHandle } from "./ResizeHandle";
+import type { ArrayStats, Hist } from "../chain/stats";
 
 const SIDEBAR_MIN = 320;
 const SIDEBAR_MAX = 900;
@@ -91,6 +92,7 @@ function NodeViewWrapper(props: {
   const runStatus = useStore((s) => s.runStatus);
   const computedSet = useStore((s) => s.computedSet);
   const currentlyComputing = useStore((s) => s.currentlyComputing);
+  const computedValue = useStore((s) => s.computedValues.get(id));
   const isComputed = computedSet.has(id);
   const isComputingNow = currentlyComputing === id;
 
@@ -111,11 +113,46 @@ function NodeViewWrapper(props: {
         <UnderComputationView isComputingNow={isComputingNow} runStatus={runStatus} />
       ) : (
         <>
-          {entry.kind === "scalar" && <ScalarView entry={entry} />}
-          {entry.kind === "array" && (
-            <ArrayView entry={entry} label={label} chartWidth={chartWidth} />
+          {entry.kind === "scalar" && (
+            <ScalarView
+              entry={entry}
+              computed={
+                computedValue?.kind === "scalar"
+                  ? { value: computedValue.value, durationMs: computedValue.durationMs }
+                  : undefined
+              }
+            />
           )}
-          {entry.kind === "dataframe" && <DataframeView entry={entry} />}
+          {entry.kind === "array" && (
+            <ArrayView
+              entry={entry}
+              label={label}
+              chartWidth={chartWidth}
+              computed={
+                computedValue?.kind === "array"
+                  ? {
+                      stats: computedValue.stats,
+                      histogram: computedValue.histogram,
+                      durationMs: computedValue.durationMs,
+                    }
+                  : undefined
+              }
+            />
+          )}
+          {entry.kind === "dataframe" && (
+            <DataframeView
+              entry={entry}
+              computed={
+                computedValue?.kind === "dataframe"
+                  ? {
+                      rowCount: computedValue.rowCount,
+                      columns: computedValue.columns,
+                      durationMs: computedValue.durationMs,
+                    }
+                  : undefined
+              }
+            />
+          )}
         </>
       )}
     </div>
@@ -127,7 +164,7 @@ function UnderComputationView({
   runStatus,
 }: {
   isComputingNow: boolean;
-  runStatus: "idle" | "running" | "done";
+  runStatus: "idle" | "running" | "done" | "error";
 }) {
   const label = isComputingNow
     ? "under computation…"
@@ -172,10 +209,24 @@ function UnderComputationView({
   );
 }
 
-function ScalarView({ entry }: { entry: ManifestEntry }) {
+function ScalarView({
+  entry,
+  computed,
+}: {
+  entry: ManifestEntry;
+  computed?: { value: number; durationMs: number };
+}) {
+  const value = computed?.value ?? entry.value;
   return (
-    <div style={{ fontSize: 24, fontVariantNumeric: "tabular-nums", padding: "8px 0" }}>
-      {entry.value !== undefined ? entry.value.toLocaleString() : "—"}
+    <div>
+      <div style={{ fontSize: 24, fontVariantNumeric: "tabular-nums", padding: "8px 0" }}>
+        {value !== undefined ? value.toLocaleString() : "—"}
+      </div>
+      {computed && (
+        <div style={{ fontSize: 10, color: "#888" }}>
+          computed in {computed.durationMs.toFixed(1)} ms · this browser
+        </div>
+      )}
     </div>
   );
 }
@@ -184,42 +235,55 @@ function ArrayView({
   entry,
   label,
   chartWidth,
+  computed,
 }: {
   entry: ManifestEntry;
   label: string;
   chartWidth: number;
+  computed?: { stats: ArrayStats; histogram: Hist; durationMs: number };
 }) {
-  const [chartEdges, setChartEdges] = useState<number[] | null>(null);
-  const [chartBins, setChartBins] = useState<number[] | null>(null);
-  const [loadingMs, setLoadingMs] = useState<number | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  // If the worker computed this node, use those results directly. Otherwise
+  // (idle/precomputed state) fall back to the parquet column.
+  const [diskEdges, setDiskEdges] = useState<number[] | null>(null);
+  const [diskBins, setDiskBins] = useState<number[] | null>(null);
+  const [diskLoadingMs, setDiskLoadingMs] = useState<number | null>(null);
+  const [diskLoaded, setDiskLoaded] = useState(false);
 
-  // Always load the full array on selection; build a 64-bin histogram from it.
   useEffect(() => {
-    if (!entry.column) return;
+    if (computed || !entry.column) return;
     let cancelled = false;
-    setLoaded(false);
-    setChartBins(null);
-    setChartEdges(null);
-    setLoadingMs(null);
+    setDiskLoaded(false);
+    setDiskBins(null);
+    setDiskEdges(null);
+    setDiskLoadingMs(null);
     const t0 = performance.now();
     (async () => {
       const arr = await loadArrayColumn(entry.path, entry.column!);
       if (cancelled) return;
       const { bins, edges } = makeHist(arr, 64);
-      setChartBins(bins);
-      setChartEdges(edges);
-      setLoadingMs(Math.round(performance.now() - t0));
-      setLoaded(true);
+      setDiskBins(bins);
+      setDiskEdges(edges);
+      setDiskLoadingMs(Math.round(performance.now() - t0));
+      setDiskLoaded(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, [entry.path, entry.column]);
+  }, [entry.path, entry.column, computed]);
 
-  // While loading, show the 32-bin manifest preview so the panel isn't blank.
-  const bins = chartBins ?? entry.histogram?.bins ?? [];
-  const edges = chartEdges ?? entry.histogram?.edges ?? [0, 1];
+  const bins = computed
+    ? computed.histogram.bins
+    : (diskBins ?? entry.histogram?.bins ?? []);
+  const edges = computed
+    ? computed.histogram.edges
+    : (diskEdges ?? entry.histogram?.edges ?? [0, 1]);
+  const stats = computed ? computed.stats : entry.stats;
+
+  const provenance = computed
+    ? `recomputed in this browser · ${stats?.n.toLocaleString()} samples · ${computed.durationMs.toFixed(1)} ms`
+    : diskLoaded
+      ? `precomputed · ${stats?.n.toLocaleString() ?? "?"} samples · parquet loaded in ${diskLoadingMs} ms`
+      : "loading full array…";
 
   return (
     <div>
@@ -231,29 +295,40 @@ function ArrayView({
         label={label}
       />
       <div style={{ fontSize: 10, color: "#888", margin: "4px 0 12px" }}>
-        {loaded
-          ? `64-bin · ${entry.stats?.n.toLocaleString() ?? "?"} samples · loaded in ${loadingMs} ms`
-          : "loading full array…"}
+        {provenance}
       </div>
-      {entry.stats && <StatsTable stats={entry.stats} />}
+      {stats && <StatsTable stats={stats} />}
     </div>
   );
 }
 
-function DataframeView({ entry }: { entry: ManifestEntry }) {
+function DataframeView({
+  entry,
+  computed,
+}: {
+  entry: ManifestEntry;
+  computed?: { rowCount: number; columns: string[]; durationMs: number };
+}) {
+  const rowCount = computed?.rowCount ?? entry.row_count;
+  const columns = computed?.columns ?? entry.columns ?? [];
   return (
     <div style={{ fontSize: 12 }}>
       <div style={{ marginBottom: 8 }}>
-        <strong>{entry.row_count?.toLocaleString() ?? "?"}</strong> rows
+        <strong>{rowCount?.toLocaleString() ?? "?"}</strong> rows
       </div>
       <div style={{ color: "#666" }}>Columns:</div>
       <ul style={{ paddingLeft: 18, margin: "4px 0" }}>
-        {(entry.columns ?? []).map((c) => (
+        {columns.map((c) => (
           <li key={c}>
             <code>{c}</code>
           </li>
         ))}
       </ul>
+      {computed && (
+        <div style={{ fontSize: 10, color: "#888", marginTop: 8 }}>
+          rebuilt in this browser in {computed.durationMs.toFixed(1)} ms
+        </div>
+      )}
     </div>
   );
 }
