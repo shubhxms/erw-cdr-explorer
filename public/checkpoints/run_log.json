@@ -1,0 +1,268 @@
+{
+  "run_started_at": "2026-05-11T06:59:49.396619+00:00",
+  "run_finished_at": "2026-05-11T07:00:07.371587+00:00",
+  "total_duration_s": 17.975626791943796,
+  "machine": {
+    "platform": "macOS-15.7.3-arm64-arm-64bit-Mach-O",
+    "python": "3.13.5",
+    "processor": "arm",
+    "numpy": "2.4.3",
+    "pandas": "2.3.3"
+  },
+  "library_version": "0.21.4",
+  "params": {
+    "N_RUNS": 200000,
+    "SEED": 42,
+    "SAMPLING_DEPTH_CM": 30.0,
+    "APPLICATION_RATE_KG_HA": 14800.0
+  },
+  "final_p16_tonnes": 4703.708526460208,
+  "expected_p16_tonnes": 4704,
+  "steps": [
+    {
+      "step": "load_inputs",
+      "started_at": "2026-05-11T06:59:49.396751+00:00",
+      "duration_s": 0.10318108298815787
+    },
+    {
+      "step": "zero_filter",
+      "started_at": "2026-05-11T06:59:49.499955+00:00",
+      "duration_s": 0.0023759169271215796
+    },
+    {
+      "step": "winsorise",
+      "started_at": "2026-05-11T06:59:49.502340+00:00",
+      "duration_s": 0.010338457999750972
+    },
+    {
+      "step": "bulk_density_bootstrap",
+      "started_at": "2026-05-11T06:59:49.524497+00:00",
+      "duration_s": 0.3680397500284016
+    },
+    {
+      "step": "soil_mass_kg_ha_scalar",
+      "started_at": "2026-05-11T06:59:49.892554+00:00",
+      "duration_s": 0.00043937505688518286
+    },
+    {
+      "step": "tracer_resolvability",
+      "started_at": "2026-05-11T06:59:49.893000+00:00",
+      "duration_s": 0.0011090420885011554
+    },
+    {
+      "step": "feedstock_bootstrap_ti",
+      "started_at": "2026-05-11T06:59:49.894119+00:00",
+      "duration_s": 0.05500483303330839
+    },
+    {
+      "step": "feedstock_bootstrap_ca",
+      "started_at": "2026-05-11T06:59:49.949151+00:00",
+      "duration_s": 0.050455916905775666
+    },
+    {
+      "step": "feedstock_bootstrap_mg",
+      "started_at": "2026-05-11T06:59:49.999629+00:00",
+      "duration_s": 0.05112833296880126
+    },
+    {
+      "step": "control_pairing",
+      "started_at": "2026-05-11T06:59:50.050784+00:00",
+      "duration_s": 0.006359291961416602
+    },
+    {
+      "step": "control_boot_indices",
+      "started_at": "2026-05-11T06:59:50.057156+00:00",
+      "duration_s": 0.5274096661014482
+    },
+    {
+      "step": "control_resample_Ca",
+      "started_at": "2026-05-11T06:59:50.584591+00:00",
+      "duration_s": 1.8715400419896469
+    },
+    {
+      "step": "control_correction_Ca",
+      "started_at": "2026-05-11T06:59:52.456141+00:00",
+      "duration_s": 0.012849917053245008
+    },
+    {
+      "step": "control_resample_Mg",
+      "started_at": "2026-05-11T06:59:52.469008+00:00",
+      "duration_s": 2.17186825000681
+    },
+    {
+      "step": "control_correction_Mg",
+      "started_at": "2026-05-11T06:59:54.640877+00:00",
+      "duration_s": 0.012894167099148035
+    },
+    {
+      "step": "deployment_pairing",
+      "started_at": "2026-05-11T06:59:54.653789+00:00",
+      "duration_s": 0.007817458943463862
+    },
+    {
+      "step": "deployment_boot_indices",
+      "started_at": "2026-05-11T06:59:54.661627+00:00",
+      "duration_s": 0.5119679580675438
+    },
+    {
+      "step": "deployment_tracer_resample",
+      "started_at": "2026-05-11T06:59:55.173621+00:00",
+      "duration_s": 1.8540622910950333
+    },
+    {
+      "step": "deployment_mass_ratio",
+      "started_at": "2026-05-11T06:59:57.027685+00:00",
+      "duration_s": 0.013868249952793121
+    },
+    {
+      "step": "deployment_app_rate_diagnostic",
+      "started_at": "2026-05-11T06:59:57.041576+00:00",
+      "duration_s": 0.02191241702530533
+    },
+    {
+      "step": "deployment_resample_Ca",
+      "started_at": "2026-05-11T06:59:57.063616+00:00",
+      "duration_s": 1.528250457951799
+    },
+    {
+      "step": "deployment_post_app_Ca",
+      "started_at": "2026-05-11T06:59:58.591910+00:00",
+      "duration_s": 0.011290792026557028
+    },
+    {
+      "step": "deployment_frac_diss_Ca",
+      "started_at": "2026-05-11T06:59:58.603230+00:00",
+      "duration_s": 0.0109322500647977
+    },
+    {
+      "step": "deployment_cdr_Ca",
+      "started_at": "2026-05-11T06:59:58.614196+00:00",
+      "duration_s": 0.009629709064029157
+    },
+    {
+      "step": "deployment_co2_Ca",
+      "started_at": "2026-05-11T06:59:58.623853+00:00",
+      "duration_s": 0.009990249993279576
+    },
+    {
+      "step": "deployment_resample_Mg",
+      "started_at": "2026-05-11T06:59:58.633888+00:00",
+      "duration_s": 1.7699707080610096
+    },
+    {
+      "step": "deployment_post_app_Mg",
+      "started_at": "2026-05-11T07:00:00.403865+00:00",
+      "duration_s": 0.010540041024796665
+    },
+    {
+      "step": "deployment_frac_diss_Mg",
+      "started_at": "2026-05-11T07:00:00.414434+00:00",
+      "duration_s": 0.010184833081439137
+    },
+    {
+      "step": "deployment_cdr_Mg",
+      "started_at": "2026-05-11T07:00:00.424657+00:00",
+      "duration_s": 0.009758416912518442
+    },
+    {
+      "step": "deployment_co2_Mg",
+      "started_at": "2026-05-11T07:00:00.434440+00:00",
+      "duration_s": 0.009843874955549836
+    },
+    {
+      "step": "treatment_pairing",
+      "started_at": "2026-05-11T07:00:00.453710+00:00",
+      "duration_s": 0.0066541669657453895
+    },
+    {
+      "step": "treatment_boot_indices",
+      "started_at": "2026-05-11T07:00:00.460379+00:00",
+      "duration_s": 0.5338224589359015
+    },
+    {
+      "step": "treatment_tracer_resample",
+      "started_at": "2026-05-11T07:00:00.994220+00:00",
+      "duration_s": 2.013009125017561
+    },
+    {
+      "step": "treatment_mass_ratio",
+      "started_at": "2026-05-11T07:00:03.007239+00:00",
+      "duration_s": 0.010711167007684708
+    },
+    {
+      "step": "treatment_app_rate_diagnostic",
+      "started_at": "2026-05-11T07:00:03.017976+00:00",
+      "duration_s": 0.017891416093334556
+    },
+    {
+      "step": "treatment_resample_Ca",
+      "started_at": "2026-05-11T07:00:03.035923+00:00",
+      "duration_s": 1.8634661249816418
+    },
+    {
+      "step": "treatment_post_app_Ca",
+      "started_at": "2026-05-11T07:00:04.899387+00:00",
+      "duration_s": 0.009944000048562884
+    },
+    {
+      "step": "treatment_frac_diss_Ca",
+      "started_at": "2026-05-11T07:00:04.909350+00:00",
+      "duration_s": 0.010311749996617436
+    },
+    {
+      "step": "treatment_cdr_Ca",
+      "started_at": "2026-05-11T07:00:04.919694+00:00",
+      "duration_s": 0.009531459072604775
+    },
+    {
+      "step": "treatment_co2_Ca",
+      "started_at": "2026-05-11T07:00:04.929262+00:00",
+      "duration_s": 0.01110679202247411
+    },
+    {
+      "step": "treatment_resample_Mg",
+      "started_at": "2026-05-11T07:00:04.940415+00:00",
+      "duration_s": 2.074053541989997
+    },
+    {
+      "step": "treatment_post_app_Mg",
+      "started_at": "2026-05-11T07:00:07.014471+00:00",
+      "duration_s": 0.012072207988239825
+    },
+    {
+      "step": "treatment_frac_diss_Mg",
+      "started_at": "2026-05-11T07:00:07.026570+00:00",
+      "duration_s": 0.012699165963567793
+    },
+    {
+      "step": "treatment_cdr_Mg",
+      "started_at": "2026-05-11T07:00:07.039318+00:00",
+      "duration_s": 0.009811124997213483
+    },
+    {
+      "step": "treatment_co2_Mg",
+      "started_at": "2026-05-11T07:00:07.049160+00:00",
+      "duration_s": 0.011212334036827087
+    },
+    {
+      "step": "significance_test",
+      "started_at": "2026-05-11T07:00:07.073247+00:00",
+      "duration_s": 0.007275916985236108
+    },
+    {
+      "step": "representativeness_test",
+      "started_at": "2026-05-11T07:00:07.080541+00:00",
+      "duration_s": 0.0026894169859588146
+    },
+    {
+      "step": "aggregation",
+      "started_at": "2026-05-11T07:00:07.083242+00:00",
+      "duration_s": 0.03439199994318187
+    },
+    {
+      "step": "distributions_summary",
+      "started_at": "2026-05-11T07:00:07.117653+00:00",
+      "duration_s": 0.2539213750278577
+    }
+  ]
+}

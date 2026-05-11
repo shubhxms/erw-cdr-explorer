@@ -1,0 +1,7 @@
+{
+  "final_p16_tonnes": 4703.708526460208,
+  "expected_p16_tonnes": 4704,
+  "match_within_5_tonnes": true,
+  "mean_total_co2_tonnes": 5783.960218466761,
+  "total_duration_s": 17.975626791943796
+}
