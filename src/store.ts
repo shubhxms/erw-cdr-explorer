@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { coneOf, coneOfEdge } from "./dag/graph";
 import { NODES } from "./dag/nodes";
-import type { ArrayStats, Hist } from "./chain/stats";
+import type { ArrayStats, Hist } from "./types/computed";
 import ChainWorker from "./worker/chainWorker?worker";
 import type { WorkerInbound, WorkerOutbound } from "./worker/chainWorker";
 
@@ -15,7 +15,14 @@ export interface Selection {
   edgeTo?: string;
 }
 
-export type RunStatus = "idle" | "running" | "done" | "error";
+export type RunStatus = "idle" | "loading" | "running" | "done" | "error";
+export type RunPhase =
+  | "loading-pyodide"
+  | "loading-packages"
+  | "installing-library"
+  | "fetching-inputs"
+  | "running"
+  | null;
 
 export type ComputedValue =
   | { kind: "array"; stats: ArrayStats; histogram: Hist; durationMs: number }
@@ -27,8 +34,8 @@ interface StoreState {
   selection: Selection;
   highlighted: Set<string> | null;
 
-  // run state
   runStatus: RunStatus;
+  runPhase: RunPhase;
   computedSet: Set<string>;
   computedValues: Map<string, ComputedValue>;
   currentlyComputing: string | null;
@@ -53,9 +60,9 @@ export const useStore = create<StoreState>((set, get) => ({
   selectedId: null,
   selection: { kind: "none", id: null },
   highlighted: null,
+
   runStatus: "idle",
-  // before any run, all nodes are "computed" — the precomputed manifest is
-  // what we show by default. Run blanks this.
+  runPhase: null,
   computedSet: allComputed(),
   computedValues: new Map(),
   currentlyComputing: null,
@@ -89,7 +96,8 @@ export const useStore = create<StoreState>((set, get) => ({
     worker = w;
 
     set({
-      runStatus: "running",
+      runStatus: "loading",
+      runPhase: "loading-pyodide",
       computedSet: new Set<string>(),
       computedValues: new Map(),
       currentlyComputing: null,
@@ -110,6 +118,7 @@ export const useStore = create<StoreState>((set, get) => ({
     }
     set({
       runStatus: "idle",
+      runPhase: null,
       computedSet: allComputed(),
       computedValues: new Map(),
       currentlyComputing: null,
@@ -120,6 +129,13 @@ export const useStore = create<StoreState>((set, get) => ({
 function onWorkerMessage(e: MessageEvent<WorkerOutbound>) {
   const msg = e.data;
   switch (msg.type) {
+    case "phase": {
+      useStore.setState({
+        runPhase: msg.phase,
+        runStatus: msg.phase === "running" ? "running" : "loading",
+      });
+      break;
+    }
     case "started": {
       useStore.setState({ currentlyComputing: msg.nodeId });
       break;
@@ -172,6 +188,7 @@ function onWorkerMessage(e: MessageEvent<WorkerOutbound>) {
     case "complete": {
       useStore.setState({
         runStatus: "done",
+        runPhase: null,
         currentlyComputing: null,
         computedP16: msg.p16,
         runDurationMs: msg.totalMs,
@@ -181,6 +198,7 @@ function onWorkerMessage(e: MessageEvent<WorkerOutbound>) {
     case "error": {
       useStore.setState({
         runStatus: "error",
+        runPhase: null,
         runError: msg.message,
         currentlyComputing: null,
       });

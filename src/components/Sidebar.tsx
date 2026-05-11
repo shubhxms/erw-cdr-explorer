@@ -6,7 +6,7 @@ import { loadArrayColumn } from "../data/loadParquet";
 import { Histogram } from "./Histogram";
 import { StatsTable } from "./StatsTable";
 import { ResizeHandle } from "./ResizeHandle";
-import type { ArrayStats, Hist } from "../chain/stats";
+import type { ArrayStats, Hist } from "../types/computed";
 
 const SIDEBAR_MIN = 320;
 const SIDEBAR_MAX = 900;
@@ -164,11 +164,11 @@ function UnderComputationView({
   runStatus,
 }: {
   isComputingNow: boolean;
-  runStatus: "idle" | "running" | "done" | "error";
+  runStatus: "idle" | "loading" | "running" | "done" | "error";
 }) {
   const label = isComputingNow
     ? "under computation…"
-    : runStatus === "running"
+    : runStatus === "running" || runStatus === "loading"
       ? "queued"
       : "no data";
   return (

@@ -70,14 +70,26 @@ export function ExplorerPage() {
 
 function RunControls() {
   const runStatus = useStore((s) => s.runStatus);
+  const runPhase = useStore((s) => s.runPhase);
   const nRuns = useStore((s) => s.nRuns);
   const setNRuns = useStore((s) => s.setNRuns);
   const startRun = useStore((s) => s.startRun);
   const cancelRun = useStore((s) => s.cancelRun);
   const computedSet = useStore((s) => s.computedSet);
   const runDurationMs = useStore((s) => s.runDurationMs);
+  const runError = useStore((s) => s.runError);
 
+  const isBusy = runStatus === "running" || runStatus === "loading";
   const progress = runStatus === "running" ? computedSet.size : null;
+  const phaseLabel = runPhase
+    ? {
+        "loading-pyodide": "loading pyodide…",
+        "loading-packages": "loading numpy/pandas/scipy…",
+        "installing-library": "installing isometric lib…",
+        "fetching-inputs": "fetching inputs…",
+        running: "running chain",
+      }[runPhase]
+    : null;
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -94,7 +106,7 @@ function RunControls() {
         <select
           value={nRuns}
           onChange={(e) => setNRuns(Number(e.target.value))}
-          disabled={runStatus === "running"}
+          disabled={isBusy}
           style={{
             fontSize: 11,
             padding: "1px 4px",
@@ -109,7 +121,7 @@ function RunControls() {
           <option value={200000}>200,000</option>
         </select>
       </label>
-      {runStatus !== "running" ? (
+      {!isBusy ? (
         <button
           type="button"
           onClick={startRun}
@@ -142,6 +154,9 @@ function RunControls() {
           stop
         </button>
       )}
+      {phaseLabel && runStatus !== "running" && (
+        <span style={{ fontSize: 11, color: "#1850c8" }}>{phaseLabel}</span>
+      )}
       {progress !== null && (
         <span
           style={{
@@ -163,6 +178,11 @@ function RunControls() {
           }}
         >
           {(runDurationMs / 1000).toFixed(2)}s
+        </span>
+      )}
+      {runStatus === "error" && runError && (
+        <span style={{ fontSize: 11, color: "#a00", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={runError}>
+          error: {runError}
         </span>
       )}
     </div>
