@@ -5,17 +5,42 @@ import { NODE_BY_ID } from "../dag/nodes";
 import { loadArrayColumn } from "../data/loadParquet";
 import { Histogram } from "./Histogram";
 import { StatsTable } from "./StatsTable";
+import { ResizeHandle } from "./ResizeHandle";
+
+const SIDEBAR_MIN = 320;
+const SIDEBAR_MAX = 900;
+const SIDEBAR_DEFAULT = 480;
+const SIDEBAR_LS_KEY = "ew-cdr.sidebar.width";
+
+function loadInitialWidth(): number {
+  if (typeof window === "undefined") return SIDEBAR_DEFAULT;
+  const v = Number(window.localStorage.getItem(SIDEBAR_LS_KEY));
+  if (!Number.isFinite(v) || v < SIDEBAR_MIN || v > SIDEBAR_MAX) return SIDEBAR_DEFAULT;
+  return v;
+}
 
 export function Sidebar() {
   const selectedId = useStore((s) => s.selectedId);
   const manifest = useManifest();
   const node = selectedId ? NODE_BY_ID[selectedId] : undefined;
   const entry = selectedId && manifest ? manifest.entries[selectedId] : undefined;
+  const [width, setWidth] = useState<number>(() => loadInitialWidth());
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SIDEBAR_LS_KEY, String(width));
+    } catch {}
+  }, [width]);
+
+  // Histogram width tracks the sidebar; cap the chart so it leaves room for padding.
+  const chartWidth = Math.max(280, width - 56);
 
   return (
     <aside
       style={{
-        width: 360,
+        position: "relative",
+        width,
+        flex: "0 0 auto",
         borderLeft: "1px solid #ddd",
         background: "#fafafa",
         padding: 16,
@@ -25,12 +50,19 @@ export function Sidebar() {
         boxSizing: "border-box",
       }}
     >
+      <ResizeHandle width={width} setWidth={setWidth} min={SIDEBAR_MIN} max={SIDEBAR_MAX} />
       {!selectedId && <EmptyState />}
       {selectedId && !entry && (
         <div style={{ color: "#888" }}>No manifest entry for {selectedId}</div>
       )}
       {selectedId && entry && (
-        <NodeView id={selectedId} label={node?.label ?? selectedId} description={node?.description} entry={entry} />
+        <NodeView
+          id={selectedId}
+          label={node?.label ?? selectedId}
+          description={node?.description}
+          entry={entry}
+          chartWidth={chartWidth}
+        />
       )}
     </aside>
   );
@@ -53,11 +85,13 @@ function NodeView({
   label,
   description,
   entry,
+  chartWidth,
 }: {
   id: string;
   label: string;
   description?: string;
   entry: ManifestEntry;
+  chartWidth: number;
 }) {
   return (
     <div>
@@ -73,7 +107,9 @@ function NodeView({
       </div>
 
       {entry.kind === "scalar" && <ScalarView entry={entry} />}
-      {entry.kind === "array" && <ArrayView entry={entry} label={label} />}
+      {entry.kind === "array" && (
+        <ArrayView entry={entry} label={label} chartWidth={chartWidth} />
+      )}
       {entry.kind === "dataframe" && <DataframeView entry={entry} />}
     </div>
   );
@@ -87,7 +123,15 @@ function ScalarView({ entry }: { entry: ManifestEntry }) {
   );
 }
 
-function ArrayView({ entry, label }: { entry: ManifestEntry; label: string }) {
+function ArrayView({
+  entry,
+  label,
+  chartWidth,
+}: {
+  entry: ManifestEntry;
+  label: string;
+  chartWidth: number;
+}) {
   const [chartEdges, setChartEdges] = useState<number[] | null>(null);
   const [chartBins, setChartBins] = useState<number[] | null>(null);
   const [loadingMs, setLoadingMs] = useState<number | null>(null);
@@ -122,7 +166,13 @@ function ArrayView({ entry, label }: { entry: ManifestEntry; label: string }) {
 
   return (
     <div>
-      <Histogram bins={bins} edges={edges} width={320} height={180} label={label} />
+      <Histogram
+        bins={bins}
+        edges={edges}
+        width={chartWidth}
+        height={Math.round(chartWidth * 0.55)}
+        label={label}
+      />
       <div style={{ fontSize: 10, color: "#888", margin: "4px 0 12px" }}>
         {loaded
           ? `64-bin · ${entry.stats?.n.toLocaleString() ?? "?"} samples · loaded in ${loadingMs} ms`

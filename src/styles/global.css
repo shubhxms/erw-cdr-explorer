@@ -1,38 +1,38 @@
 html,
 body,
 #root {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  background: #f6f6f6;
-  color: #222;
-  -webkit-font-smoothing: antialiased;
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #f6f6f6;
+    color: #222;
+    -webkit-font-smoothing: antialiased;
 }
 
 * {
-  box-sizing: border-box;
+    box-sizing: border-box;
 }
 
 a {
-  color: #1850c8;
-  text-decoration: none;
+    color: #1850c8;
+    text-decoration: none;
 }
 
 a:hover {
-  text-decoration: underline;
+    text-decoration: underline;
 }
 
 code {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 0.9em;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.9em;
 }
 
 /* react-flow tweaks */
 .react-flow__node {
-  font-family: system-ui, sans-serif;
+    font-family: system-ui, sans-serif;
 }
 
 .react-flow__attribution {
-  font-size: 9px;
-  opacity: 0.5;
+    font-size: 9px;
+    opacity: 0.5;
 }
