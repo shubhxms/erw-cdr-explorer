@@ -51,6 +51,16 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
   const computedSet = useStore((s) => s.computedSet);
   const currentlyComputing = useStore((s) => s.currentlyComputing);
   const computedValue = useStore((s) => s.computedValues.get(d.id));
+  // Edit/override indicators. We count any edit whose nodeId matches THIS node
+  // (areas, column transforms keyed by `${nodeId}|*`).
+  const hasEdit = useStore((s) => {
+    for (const k of s.edits.keys()) {
+      if (k === d.id || k.startsWith(`${d.id}|`)) return true;
+    }
+    return false;
+  });
+  const hasOverride = useStore((s) => s.overrides.has(d.id));
+  const wasOverridden = useStore((s) => s.overriddenSet.has(d.id));
 
   const isComputed = computedSet.has(d.id);
   const isRunning = runStatus === "running";
@@ -124,6 +134,10 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
             color: showData ? "#222" : "#888",
           }}
         >
+          {hasEdit && <span style={{ color: "#a4570e", marginRight: 3 }}>✎</span>}
+          {(hasOverride || wasOverridden) && (
+            <span style={{ color: "#7a4fb1", marginRight: 3 }}>📌</span>
+          )}
           {d.label}
         </span>
         <span

@@ -11,6 +11,7 @@ import "@xyflow/react/dist/style.css";
 import { computeLayout } from "./layout";
 import { CheckpointNode, type CheckpointNodeData } from "./CheckpointNode";
 import { Legend } from "./Legend";
+import { EditsPanel } from "../components/EditsPanel";
 import { useStore } from "../store";
 
 const NODE_TYPES = { checkpoint: CheckpointNode };
@@ -105,6 +106,7 @@ export function Graph() {
         <MiniMap pannable zoomable />
       </ReactFlow>
       <Legend />
+      <EditsPanel />
     </div>
   );
 }
