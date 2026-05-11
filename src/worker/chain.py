@@ -78,6 +78,69 @@ def col(e):
     return f"mass_fraction_{e.lower()}"
 
 
+# Default chunk for the iteration-axis split below. At chunk_size=20_000 and
+# n_paired ≈ 894 the peak gather buffer is 20k × 894 × 8 ≈ 140 MB, comfortably
+# inside the Pyodide WASM heap (~2 GB usable). At N=200k the chain runs in 10
+# sequential chunks per plot.
+DEFAULT_CHUNK = 20_000
+
+
+def chunked_simple_bootstrap(fn, rng, values, n_runs, chunk_size=DEFAULT_CHUNK):
+    """Run a library bootstrap function in chunks of n_runs to bound peak
+    memory. Works for `resample_mean(rng, values, K)` and the equivalent
+    `bootstrap_bulk_density_paired` — both produce length-K mean arrays
+    deterministically given the rng stream.
+    """
+    out = np.empty(n_runs, dtype=np.float64)
+    done = 0
+    while done < n_runs:
+        cs = min(chunk_size, n_runs - done)
+        out[done : done + cs] = fn(rng, values, cs)
+        done += cs
+    return out
+
+
+def chunked_resample_all(rng, columns_dict, n_runs, chunk_size=DEFAULT_CHUNK):
+    """Memory-bounded equivalent of `generate_bootstrap_location_indices` +
+    `compute_resampled_means_from_indices` fan-out across multiple columns.
+
+    The library is happy to allocate (n_runs, n_paired) float64 arrays for
+    indices and each gather; at N=200_000 and n_paired ≈ 894 that's 1.3 GB
+    apiece, which blows Pyodide's WASM heap. We chunk along the iteration
+    axis instead.
+
+    RNG state advances identically to one big call: numpy's `Generator.integers`
+    produces a deterministic sequential stream regardless of the shape you
+    request. The mathematical result is bit-equal to the unchunked path.
+
+    Args:
+        rng: numpy Generator (advanced in-place).
+        columns_dict: {label: 1-D numpy array}; all arrays must share length.
+        n_runs: total bootstrap iterations.
+        chunk_size: rows of indices materialised at a time.
+
+    Returns:
+        {label: 1-D numpy float64 array of length n_runs}
+    """
+    items = list(columns_dict.items())
+    n_paired = len(items[0][1])
+    for k, a in items:
+        if len(a) != n_paired:
+            raise ValueError(
+                f"column {k} has length {len(a)}, expected {n_paired}",
+            )
+    out = {k: np.empty(n_runs, dtype=np.float64) for k in columns_dict}
+    done = 0
+    while done < n_runs:
+        cs = min(chunk_size, n_runs - done)
+        idx = generate_bootstrap_location_indices(rng, n_paired, cs)
+        for k, arr in items:
+            out[k][done : done + cs] = compute_resampled_means_from_indices(arr, idx)
+        done += cs
+        del idx
+    return out
+
+
 # -- bridge helpers ---------------------------------------------------------
 
 
@@ -228,7 +291,9 @@ def run(n_runs, seed):
     bd_values = bulk_density_samples["bulk_density"].dropna().to_numpy()
     bd_boot = track_array(
         "bootstrap/bd_boot",
-        lambda: bootstrap_bulk_density_paired(rng, bd_values, n_runs),
+        lambda: chunked_simple_bootstrap(
+            bootstrap_bulk_density_paired, rng, bd_values, n_runs,
+        ),
     )
 
     bd_mean = float(np.mean(bd_values))
@@ -267,15 +332,21 @@ def run(n_runs, seed):
 
     fs_ti = track_array(
         "bootstrap/fs_ti",
-        lambda: resample_mean(rng, feedstock[tracer_col].dropna().to_numpy(), n_runs),
+        lambda: chunked_simple_bootstrap(
+            resample_mean, rng, feedstock[tracer_col].dropna().to_numpy(), n_runs,
+        ),
     )
     fs_ca = track_array(
         "bootstrap/fs_ca",
-        lambda: resample_mean(rng, feedstock[ca_col].dropna().to_numpy(), n_runs),
+        lambda: chunked_simple_bootstrap(
+            resample_mean, rng, feedstock[ca_col].dropna().to_numpy(), n_runs,
+        ),
     )
     fs_mg = track_array(
         "bootstrap/fs_mg",
-        lambda: resample_mean(rng, feedstock[mg_col].dropna().to_numpy(), n_runs),
+        lambda: chunked_simple_bootstrap(
+            resample_mean, rng, feedstock[mg_col].dropna().to_numpy(), n_runs,
+        ),
     )
     fs_by_cation = {"Ca": fs_ca, "Mg": fs_mg}
 
@@ -285,21 +356,28 @@ def run(n_runs, seed):
     n_control = len(control_paired)
     track_df("bootstrap/control_paired", lambda: control_paired, control_paired.columns)
 
-    ctl_idx = generate_bootstrap_location_indices(rng, n_control, n_runs)
+    # Chunked control bootstrap (shared indices across Ca + Mg, per library spec).
+    ctl_means = chunked_resample_all(
+        rng,
+        {
+            f"bl_{col('Ca')}": control_paired[f"bl_{col('Ca')}"].to_numpy(),
+            f"rp_{col('Ca')}": control_paired[f"rp_{col('Ca')}"].to_numpy(),
+            f"bl_{col('Mg')}": control_paired[f"bl_{col('Mg')}"].to_numpy(),
+            f"rp_{col('Mg')}": control_paired[f"rp_{col('Mg')}"].to_numpy(),
+        },
+        n_runs,
+    )
+
     control_correction_ratio_p50 = {}
     for cation in CATIONS:
         cc = col(cation)
         bl = track_array(
             f"bootstrap/ctl_bl_{cc}",
-            lambda c=cc: compute_resampled_means_from_indices(
-                control_paired[f"bl_{c}"].to_numpy(), ctl_idx
-            ),
+            lambda v=ctl_means[f"bl_{cc}"]: v,
         )
         rp = track_array(
             f"bootstrap/ctl_rp_{cc}",
-            lambda c=cc: compute_resampled_means_from_indices(
-                control_paired[f"rp_{c}"].to_numpy(), ctl_idx
-            ),
+            lambda v=ctl_means[f"rp_{cc}"]: v,
         )
         cc_boot = track_array(
             f"bootstrap/ctl_corr_boot_{cc}",
@@ -311,6 +389,7 @@ def run(n_runs, seed):
         p50 = float(np.percentile(cc_boot, 50))
         track_scalar(f"bootstrap/ctrl_corr_p50_{cc}", lambda v=p50: v)
         control_correction_ratio_p50[cation] = p50
+    del ctl_means
 
     # ----- per-plot chain -------------------------------------------------
     paired_by_plot = {}
@@ -338,19 +417,25 @@ def run(n_runs, seed):
                 "n_reporting_period_only": pairing.n_reporting_period_only,
             })
 
-        boot_idx = generate_bootstrap_location_indices(rng, n_paired, n_runs)
+        # Chunked per-plot bootstrap (shared indices across Ti+Ca+Mg, per library).
+        plot_means = chunked_resample_all(
+            rng,
+            {
+                f"bl_{tracer_col}": paired[f"bl_{tracer_col}"].to_numpy(),
+                f"rp_{tracer_col}": paired[f"rp_{tracer_col}"].to_numpy(),
+                f"bl_{col('Ca')}": paired[f"bl_{col('Ca')}"].to_numpy(),
+                f"rp_{col('Ca')}": paired[f"rp_{col('Ca')}"].to_numpy(),
+                f"bl_{col('Mg')}": paired[f"bl_{col('Mg')}"].to_numpy(),
+                f"rp_{col('Mg')}": paired[f"rp_{col('Mg')}"].to_numpy(),
+            },
+            n_runs,
+        )
 
         bl_ti = track_array(
-            f"{prefix}/bl_ti",
-            lambda: compute_resampled_means_from_indices(
-                paired[f"bl_{tracer_col}"].to_numpy(), boot_idx
-            ),
+            f"{prefix}/bl_ti", lambda v=plot_means[f"bl_{tracer_col}"]: v,
         )
         rp_ti = track_array(
-            f"{prefix}/rp_ti",
-            lambda: compute_resampled_means_from_indices(
-                paired[f"rp_{tracer_col}"].to_numpy(), boot_idx
-            ),
+            f"{prefix}/rp_ti", lambda v=plot_means[f"rp_{tracer_col}"]: v,
         )
 
         mass_ratio = track_array(
@@ -384,16 +469,10 @@ def run(n_runs, seed):
             fs_cation = fs_by_cation[cation]
 
             bl_c = track_array(
-                f"{prefix}/bl_{cc}",
-                lambda c=cc: compute_resampled_means_from_indices(
-                    paired[f"bl_{c}"].to_numpy(), boot_idx
-                ),
+                f"{prefix}/bl_{cc}", lambda v=plot_means[f"bl_{cc}"]: v,
             )
             rp_c = track_array(
-                f"{prefix}/rp_{cc}",
-                lambda c=cc: compute_resampled_means_from_indices(
-                    paired[f"rp_{c}"].to_numpy(), boot_idx
-                ),
+                f"{prefix}/rp_{cc}", lambda v=plot_means[f"rp_{cc}"]: v,
             )
             post_app = track_array(
                 f"{prefix}/post_app_{cc}",
@@ -428,6 +507,7 @@ def run(n_runs, seed):
 
         co2_kg_ha_by_plot[plot_label] = co2_combined_kg_ha
         track_array(f"{prefix}/co2_combined_kg_ha", lambda v=co2_combined_kg_ha: v)
+        del plot_means  # ~140 MB; release before the next plot resamples
 
     # control pairing rows (for completeness)
     for cation in CATIONS:
