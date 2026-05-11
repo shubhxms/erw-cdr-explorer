@@ -30,32 +30,40 @@ export function Graph() {
     const hl = highlighted;
     const sel = selection;
     const styledNodes: Node<CheckpointNodeData>[] = base.nodes.map((n) => {
-      if (!hl) return n;
+      const isSelectedNode = sel.kind === "node" && sel.id === n.id;
+      if (!hl) return { ...n, selected: isSelectedNode };
       const inSet = hl.has(n.id);
       return {
         ...n,
-        style: inSet ? undefined : { opacity: 0.18 },
-        selected: sel.kind === "node" && sel.id === n.id,
+        selected: isSelectedNode,
+        style: inSet
+          ? { filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.12))" }
+          : { opacity: 0.18, filter: "grayscale(1)" },
       };
     });
     const styledEdges: Edge[] = base.edges.map((e) => {
       const isSelectedEdge =
         sel.kind === "edge" && sel.edgeFrom === e.source && sel.edgeTo === e.target;
+      const baseStyle = e.style ?? {};
       if (!hl) {
-        return { ...e, style: { ...e.style, opacity: isSelectedEdge ? 1 : 0.85 } };
+        return { ...e, style: { ...baseStyle, opacity: 0.85 } };
       }
       const both = hl.has(e.source) && hl.has(e.target);
-      const base = e.style ?? {};
+      if (!both) {
+        return { ...e, style: { ...baseStyle, opacity: 0.04 } };
+      }
+      // edge inside the cone
+      const isDiag =
+        (baseStyle as { strokeDasharray?: string }).strokeDasharray !== undefined;
       return {
         ...e,
-        style: both
-          ? {
-              ...base,
-              opacity: 1,
-              stroke: isSelectedEdge ? "#111" : (base as { stroke?: string }).stroke,
-              strokeWidth: isSelectedEdge ? 2 : ((base as { strokeWidth?: number }).strokeWidth ?? 1.2),
-            }
-          : { ...base, opacity: 0.08 },
+        animated: true,
+        style: {
+          ...baseStyle,
+          opacity: 1,
+          stroke: isSelectedEdge ? "#111" : isDiag ? "#7a4fb1" : "#1850c8",
+          strokeWidth: isSelectedEdge ? 2.4 : 1.8,
+        },
       };
     });
     return { nodes: styledNodes, edges: styledEdges };
