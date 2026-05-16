@@ -4,7 +4,7 @@
  * Usage: tsx scripts/build-manifest.ts <removalId>
  *   e.g. tsx scripts/build-manifest.ts rmv_1KH3W7FMH1S0J5R9
  *
- * For each parquet [N] array: load, compute summary stats + 32-bin histogram.
+ * For each parquet [N] array: load, compute summary stats + 64-bin histogram.
  * For each scalar JSON: pass through value.
  * For each dataframe parquet: record row count.
  *
@@ -149,7 +149,10 @@ function summarise(values: Float64Array): ArrayStats {
   };
 }
 
-function histogram(values: Float64Array, nbins = 32): Histogram {
+// 64 bins to match the live worker-side histograms in src/worker/chain.py
+// (np.histogram with bins=64). Same resolution on both sides keeps the
+// CURRENT vs REGISTRY BASELINE comparison visually 1:1.
+function histogram(values: Float64Array, nbins = 64): Histogram {
   let mn = Infinity;
   let mx = -Infinity;
   for (let i = 0; i < values.length; i++) {
@@ -318,7 +321,7 @@ async function main() {
       meta.columns.find((c) => ARRAY_LIKE_COLUMNS.has(c)) ?? meta.columns[0];
     const arr = await readParquetColumn(abs, valueCol);
     const stats = summarise(arr);
-    const hist = histogram(arr, 32);
+    const hist = histogram(arr, 64);
     entries[id] = {
       id,
       kind: "array",
