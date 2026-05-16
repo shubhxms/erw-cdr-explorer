@@ -1,5 +1,5 @@
 /**
- * DAG edges following the dependency table from run_chain.py / checkpoint_plan.md.
+ * DAG edges following the dependency structure of the calculation chain.
  *
  * `kind: "diagnostic"` means the edge does not contribute to p16; rendered dashed.
  */
@@ -102,7 +102,7 @@ export const EDGES: DagEdge[] = [
   main("inputs/feedstock_samples", "bootstrap/fs_ca"),
   main("inputs/feedstock_samples", "bootstrap/fs_mg"),
   diag("inputs/feedstock_samples", "diagnostics/tracer_resolvability"),
-  // significance test uses feedstock cation means directly (run_chain.py:553)
+  // significance test uses feedstock cation means directly
   diag("inputs/feedstock_samples", "diagnostics/significance_test"),
 
   // -- control bootstrap chain --

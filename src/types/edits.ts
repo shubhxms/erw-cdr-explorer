@@ -1,5 +1,5 @@
 /**
- * S1 input edits (causal) + node overrides (counterfactual).
+ * Input edits (causal) + node overrides (counterfactual).
  *
  * Edits are batched in the store and serialised into the worker `run` message.
  * The chain.py Python side applies them at the right point: input edits at the
@@ -34,7 +34,7 @@ export const CONSTANTS: ConstantMeta[] = [
   {
     id: "constants/sampling_depth_cm",
     label: "Sampling depth",
-    description: "Soil sampling depth (cm). Feeds soil_mass_kg_ha (diagnostic).",
+    description: "Soil sampling depth (cm). Feeds soil_mass_kg_ha (validation only).",
     defaultValue: 30,
     kind: "scalar",
     range: [15, 60],

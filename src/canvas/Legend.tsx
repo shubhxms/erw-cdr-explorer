@@ -7,10 +7,10 @@ import { STAGE_COLOR } from "./stageColor";
 const STAGE_LABEL: Record<keyof typeof STAGE_COLOR, string> = {
   inputs: "inputs",
   cleaning: "cleaning",
-  bootstrap: "bootstrap (S2)",
+  bootstrap: "bootstrap",
   chain_deployment: "chain · deployment",
   chain_treatment: "chain · treatment",
-  diagnostics: "diagnostics",
+  diagnostics: "validation",
   aggregation: "aggregation → p16",
 };
 
@@ -75,7 +75,7 @@ export function Legend() {
             strokeDasharray="4 3"
           />
         </svg>
-        <span>diagnostic only</span>
+        <span>validation only</span>
       </div>
       <div style={{ color: "#888", margin: "8px 0 4px" }}>when highlighted</div>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
@@ -96,7 +96,7 @@ export function Legend() {
             strokeDasharray="6 4"
           />
         </svg>
-        <span>diagnostic (dashed)</span>
+        <span>validation (dashed)</span>
       </div>
     </div>
   );
