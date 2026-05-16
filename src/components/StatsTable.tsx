@@ -10,9 +10,10 @@ function fmt(v: number | undefined): string {
   return v.toFixed(6);
 }
 
-function deltaFmt(cur: number, prev: number | undefined): string | null {
-  if (prev === undefined || !Number.isFinite(prev) || !Number.isFinite(cur)) return null;
-  const d = cur - prev;
+function deltaFmt(cur: number | undefined, base: number | undefined): string | null {
+  if (cur === undefined || base === undefined) return null;
+  if (!Number.isFinite(cur) || !Number.isFinite(base)) return null;
+  const d = cur - base;
   if (d === 0) return null;
   return `${d >= 0 ? "+" : ""}${fmt(d)}`;
 }
@@ -24,6 +25,7 @@ const thStyle: React.CSSProperties = {
   textAlign: "left",
   color: "#888",
   borderBottom: "2px solid #ddd",
+  letterSpacing: 0.3,
 };
 
 const tdLabel: React.CSSProperties = {
@@ -38,67 +40,79 @@ const tdNum: React.CSSProperties = {
   fontVariantNumeric: "tabular-nums",
 };
 
-// Matches the chart bar colors so the table reads "this column is the
-// same series as that chart". current = brand blue accent; original = muted.
 const CURRENT_COLOR = "#1850c8";
-const ORIGINAL_COLOR = "#888";
+const BASELINE_COLOR = "#888";
 
-export function StatsTable({ stats, previous }: { stats: ArrayStats; previous?: ArrayStats }) {
-  const rows: [string, number, number | undefined][] = [
-    ["n", stats.n, previous?.n],
-    ["mean", stats.mean, previous?.mean],
-    ["std", stats.std, previous?.std],
-    ["min", stats.min, previous?.min],
-    ["p5", stats.p5, previous?.p5],
-    ["p16", stats.p16, previous?.p16],
-    ["p50 (median)", stats.p50, previous?.p50],
-    ["p84", stats.p84, previous?.p84],
-    ["p95", stats.p95, previous?.p95],
-    ["max", stats.max, previous?.max],
-    ["NaN count", stats.nan_count, previous?.nan_count],
-    ["inf count", stats.inf_count, previous?.inf_count],
+/**
+ * Stat comparison table. `current` = computed-in-this-browser values;
+ * `baseline` = registry-aligned manifest values. Either can be omitted —
+ * if both are present we render CURRENT, REGISTRY BASELINE, Δ columns.
+ */
+export function StatsTable({
+  current,
+  baseline,
+}: {
+  current?: ArrayStats;
+  baseline?: ArrayStats;
+}) {
+  const stats: (keyof ArrayStats)[] = [
+    "n",
+    "mean",
+    "std",
+    "min",
+    "p5",
+    "p16",
+    "p50",
+    "p84",
+    "p95",
+    "max",
+    "nan_count",
+    "inf_count",
   ];
+  const labels: Record<string, string> = {
+    p50: "p50 (median)",
+    nan_count: "NaN count",
+    inf_count: "inf count",
+  };
+  const showCurrent = !!current;
+  const showBaseline = !!baseline;
+  const showDelta = showCurrent && showBaseline;
+
   return (
     <table style={{ borderCollapse: "collapse", fontSize: 12, width: "100%" }}>
       <thead>
         <tr>
           <th style={thStyle}>stat</th>
-          <th
-            style={{
-              ...thStyle,
-              textAlign: "right",
-              color: CURRENT_COLOR,
-              letterSpacing: 0.3,
-            }}
-          >
-            CURRENT
-          </th>
-          {previous && (
-            <th
-              style={{
-                ...thStyle,
-                textAlign: "right",
-                color: ORIGINAL_COLOR,
-                letterSpacing: 0.3,
-              }}
-            >
-              ORIGINAL
+          {showCurrent && (
+            <th style={{ ...thStyle, textAlign: "right", color: CURRENT_COLOR }}>
+              CURRENT
             </th>
           )}
-          {previous && <th style={{ ...thStyle, textAlign: "right" }}>Δ</th>}
+          {showBaseline && (
+            <th style={{ ...thStyle, textAlign: "right", color: BASELINE_COLOR }}>
+              REGISTRY BASELINE
+            </th>
+          )}
+          {showDelta && <th style={{ ...thStyle, textAlign: "right" }}>Δ</th>}
         </tr>
       </thead>
       <tbody>
-        {rows.map(([k, v, prev]) => {
-          const delta = previous ? deltaFmt(v, prev) : null;
+        {stats.map((k) => {
+          const cur = current?.[k];
+          const base = baseline?.[k];
+          const delta = showDelta ? deltaFmt(cur, base) : null;
           return (
             <tr key={k} style={{ borderBottom: "1px solid #eee" }}>
-              <td style={tdLabel}>{k}</td>
-              <td style={{ ...tdNum, color: CURRENT_COLOR, fontWeight: 600 }}>{fmt(v)}</td>
-              {previous && (
-                <td style={{ ...tdNum, color: ORIGINAL_COLOR }}>{fmt(prev)}</td>
+              <td style={tdLabel}>{labels[k] ?? k}</td>
+              {showCurrent && (
+                <td style={{ ...tdNum, color: CURRENT_COLOR, fontWeight: 600 }}>
+                  {fmt(cur)}
+                </td>
               )}
-              {previous && (
+              {showBaseline && (
+                <td style={{ ...tdNum, color: BASELINE_COLOR }}>{fmt(base)}</td>
+              )}
+              {showDelta && (
                 <td
                   style={{
                     ...tdNum,

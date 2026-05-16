@@ -6,8 +6,9 @@ import { loadArrayColumn } from "../data/loadParquet";
 import { Histogram } from "./Histogram";
 import { StatsTable } from "./StatsTable";
 import { ResizeHandle } from "./ResizeHandle";
-import { S1EditPanel } from "./S1EditPanel";
+import { InputEditPanel } from "./InputEditPanel";
 import { OverridePanel } from "./OverridePanel";
+import { ExportButton } from "./ExportButton";
 import type { ArrayStats, Hist } from "../types/computed";
 
 const SIDEBAR_MIN = 320;
@@ -24,7 +25,8 @@ function loadInitialWidth(): number {
 
 export function Sidebar() {
   const selectedId = useStore((s) => s.selectedId);
-  const manifest = useManifest();
+  const removalId = useStore((s) => s.removalId);
+  const { manifest } = useManifest(removalId);
   const node = selectedId ? NODE_BY_ID[selectedId] : undefined;
   const entry = selectedId && manifest ? manifest.entries[selectedId] : undefined;
   const [width, setWidth] = useState<number>(() => loadInitialWidth());
@@ -158,7 +160,8 @@ function NodeViewWrapper(props: {
           )}
         </>
       )}
-      <S1EditPanel nodeId={id} />
+      <ExportButton nodeId={id} entry={entry} />
+      <InputEditPanel nodeId={id} />
       {entry.kind === "array" && id !== "aggregation/total_co2_tonnes" && (
         <OverridePanel
           nodeId={id}
@@ -258,22 +261,20 @@ function ArrayView({
   chartWidth: number;
   computed?: { stats: ArrayStats; histogram: Hist; durationMs: number };
 }) {
-  // If the worker computed this node, use those results directly. Otherwise
-  // (idle/precomputed state) fall back to the parquet column.
+  // Two distributions exist for any [N] node:
+  //   - CURRENT       = what Pyodide computed in *this* run. Only defined if a
+  //                     run has completed for this node. Color: blue (#1850c8).
+  //   - REGISTRY BASE = the manifest baseline (precomputed at N=200k against
+  //                     the registry value). Always defined. Color: gray.
+  //
+  // We never label manifest data as "CURRENT" — that was the bug. Pre-run we
+  // show only the registry baseline; after a run we show CURRENT on top and
+  // (if it differs) REGISTRY BASELINE underneath for comparison.
+
   const [diskEdges, setDiskEdges] = useState<number[] | null>(null);
   const [diskBins, setDiskBins] = useState<number[] | null>(null);
   const [diskLoadingMs, setDiskLoadingMs] = useState<number | null>(null);
   const [diskLoaded, setDiskLoaded] = useState(false);
-
-  // "original" here always means the manifest's registry-aligned baseline
-  // — the value that's published by Isometric / matches the run_chain.py
-  // run at N=200k. It is NOT the previous run's value (which would drift
-  // across iterations and confuse the comparison).
-  const dirtySet = useStore((s) => s.dirtySet);
-  const nodeId = entry.id;
-  const isDirty = dirtySet.has(nodeId);
-  const originalHist = entry.histogram;
-  const originalStats = entry.stats;
 
   useEffect(() => {
     if (computed || !entry.column) return;
@@ -297,44 +298,46 @@ function ArrayView({
     };
   }, [entry.path, entry.column, computed]);
 
-  const bins = computed
-    ? computed.histogram.bins
-    : (diskBins ?? entry.histogram?.bins ?? []);
-  const edges = computed
-    ? computed.histogram.edges
-    : (diskEdges ?? entry.histogram?.edges ?? [0, 1]);
-  const stats = computed ? computed.stats : entry.stats;
+  const baselineHist =
+    entry.histogram ??
+    (diskBins && diskEdges ? { bins: diskBins, edges: diskEdges } : null);
+  const baselineStats = entry.stats;
+  const chartH = Math.round(chartWidth * 0.45);
 
   const provenance = computed
-    ? `recomputed in this browser · ${stats?.n.toLocaleString()} samples · ${computed.durationMs.toFixed(1)} ms`
+    ? `recomputed in this browser · ${computed.stats?.n.toLocaleString()} samples · ${computed.durationMs.toFixed(1)} ms`
     : diskLoaded
-      ? `precomputed · ${stats?.n.toLocaleString() ?? "?"} samples · parquet loaded in ${diskLoadingMs} ms`
-      : "loading full array…";
+      ? `manifest baseline · ${baselineStats?.n.toLocaleString() ?? "?"} samples · parquet loaded in ${diskLoadingMs} ms`
+      : entry.histogram
+        ? `manifest baseline · ${baselineStats?.n.toLocaleString() ?? "?"} samples`
+        : "loading full array…";
 
   return (
     <div>
-      <div style={{ marginBottom: 4 }}>
-        <div
-          style={{
-            fontSize: 10,
-            color: "#1850c8",
-            marginBottom: 2,
-            fontWeight: 700,
-            letterSpacing: 0.3,
-          }}
-        >
-          CURRENT
+      {computed && (
+        <div style={{ marginBottom: 6 }}>
+          <div
+            style={{
+              fontSize: 10,
+              color: "#1850c8",
+              marginBottom: 2,
+              fontWeight: 700,
+              letterSpacing: 0.3,
+            }}
+          >
+            CURRENT <span style={{ fontWeight: 400, color: "#666" }}>· this browser run</span>
+          </div>
+          <Histogram
+            bins={computed.histogram.bins}
+            edges={computed.histogram.edges}
+            width={chartWidth}
+            height={chartH}
+            label={label}
+            barColor="rgba(24,80,200,0.55)"
+          />
         </div>
-        <Histogram
-          bins={bins}
-          edges={edges}
-          width={chartWidth}
-          height={Math.round(chartWidth * 0.5)}
-          label={label}
-          barColor="rgba(24,80,200,0.45)"
-        />
-      </div>
-      {isDirty && originalHist && (
+      )}
+      {baselineHist && (
         <div style={{ marginBottom: 4 }}>
           <div
             style={{
@@ -345,23 +348,27 @@ function ArrayView({
               letterSpacing: 0.3,
             }}
           >
-            ORIGINAL <span style={{ fontWeight: 400 }}>· registry baseline</span>
+            REGISTRY BASELINE
+            <span style={{ fontWeight: 400 }}> · N=200k vs registry</span>
           </div>
           <Histogram
-            bins={originalHist.bins}
-            edges={originalHist.edges}
+            bins={baselineHist.bins}
+            edges={baselineHist.edges}
             width={chartWidth}
-            height={Math.round(chartWidth * 0.35)}
-            label={`${label} (original)`}
-            barColor="rgba(160,160,160,0.45)"
+            height={chartH}
+            label={`${label} (baseline)`}
+            barColor="rgba(160,160,160,0.55)"
           />
         </div>
       )}
       <div style={{ fontSize: 10, color: "#888", margin: "4px 0 12px" }}>
         {provenance}
       </div>
-      {stats && (
-        <StatsTable stats={stats} previous={isDirty ? originalStats : undefined} />
+      {(computed?.stats || baselineStats) && (
+        <StatsTable
+          current={computed?.stats}
+          baseline={baselineStats}
+        />
       )}
     </div>
   );

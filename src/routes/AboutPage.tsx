@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
 import { useManifest } from "../data/manifest";
+import { useStore } from "../store";
 
 export function AboutPage() {
-  const m = useManifest();
+  const removalId = useStore((s) => s.removalId);
+  const { manifest: m } = useManifest(removalId);
   return (
     <div
       style={{
@@ -21,12 +23,39 @@ export function AboutPage() {
 
       <h2 style={{ fontSize: 16, marginTop: 0 }}>What is this?</h2>
       <p>
-        An interactive visualization of the enhanced-weathering carbon dioxide
-        removal (CDR) calculation for <strong>Alt Carbon's Darjeeling project</strong>,
-        published on the <a href="https://isometric.com" target="_blank" rel="noreferrer">Isometric</a> registry.
-        Every named intermediate variable in the calculation chain appears as a
-        node on the DAG canvas — click any node to inspect its distribution,
-        summary statistics, and provenance.
+        An interactive visualization of the enhanced-weathering CDR calculation
+        for <strong>Alt Carbon's Darjeeling project</strong> on the{" "}
+        <a
+          href="https://registry.isometric.com/supplier/spl_1J6EQFMYF1S00KDE#issuances"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Isometric registry
+        </a>
+        . Specifically, it reproduces the gross CDR figure for removal{" "}
+        <a
+          href="https://registry.isometric.com/removal/rmv_1KH3W7FMH1S0J5R9?tab=data-points"
+          target="_blank"
+          rel="noreferrer"
+        >
+          rmv_1KH3W7FMH1S0J5R9
+        </a>
+        . Every named intermediate variable in the calculation chain appears
+        as a node on the DAG canvas — click any node to inspect its
+        distribution, summary statistics, and provenance.
+      </p>
+
+      <h2 style={{ fontSize: 16 }}>Scope</h2>
+      <p>
+        This explorer reproduces only the <strong>CDR from weathering</strong>
+        {" "}sub-calculation — the 4,703.709 tCO₂e gross figure derived from
+        soil bootstrapping and tracer-corrected mass balance. The final
+        issued removal subtracts upstream activity emissions (flights,
+        freight, spreading fuel, lab electricity), weathering losses (strong
+        acid weathering, plant uptake, counterfactual liming), an attribution
+        factor (~36.87%), and downstream retention coefficients (river runoff
+        99.30%, ocean re-equilibration 78.80%). Those steps are out of scope
+        here.
       </p>
 
       <h2 style={{ fontSize: 16 }}>How does the chain work?</h2>
@@ -44,12 +73,12 @@ export function AboutPage() {
 
       <h2 style={{ fontSize: 16 }}>Reported result</h2>
       <p>
-        The registry reports <strong>p16 = 4,704 tonnes CO₂</strong>.
+        The registry reports <strong>p16 = 4,703.709 tCO₂e</strong>.
         {m && m.computed_p16 !== null && (
           <>
             {" "}This explorer independently computed{" "}
-            <strong>{m.computed_p16.toFixed(2)} tonnes</strong>{" "}
-            (Δ = {Math.abs(m.computed_p16 - m.registry_p16).toFixed(2)}),
+            <strong>{m.computed_p16.toFixed(3)} tCO₂e</strong>{" "}
+            (Δ = {Math.abs(m.computed_p16 - m.registry_p16).toFixed(3)}),
             verifying the chain end-to-end in the browser.
           </>
         )}
@@ -60,13 +89,15 @@ export function AboutPage() {
         The explorer supports two types of edits:
       </p>
       <ul style={{ paddingLeft: 20 }}>
-        <li><strong>Causal edits</strong> — Modify inputs (feedstock columns, bulk density, plot areas, or chain constants) and recompute the full chain. Only nodes downstream of your change are recalculated; unaffected nodes reuse cached values.</li>
+        <li><strong>Causal edits</strong> — Modify inputs (feedstock columns, bulk density, plot areas, or chain constants) and recompute the full chain.</li>
         <li><strong>Counterfactual overrides</strong> — Pin any intermediate node to a chosen value (point-collapse or mean-shift) and propagate forward. Upstream and sibling branches stay on their original values.</li>
       </ul>
       <p>
-        When changes are made, the previous run's distribution is shown as a
-        translucent red overlay on affected nodes, so you can compare before and
-        after at a glance.
+        Each <code>[N]</code> node's sidebar shows <strong>CURRENT</strong>
+        {" "}(what this browser just computed) above{" "}
+        <strong>REGISTRY BASELINE</strong> (the precomputed N=200k reference
+        that matches the registry value), with a Δ column for every summary
+        statistic.
       </p>
 
       <h2 style={{ fontSize: 16 }}>Technology</h2>

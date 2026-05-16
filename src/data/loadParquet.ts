@@ -20,3 +20,11 @@ export async function loadArrayColumn(
   arrayCache.set(key, out);
   return out;
 }
+
+/** Load all rows + columns of a parquet file (for dataframe CSV export). */
+export async function loadDataframe(
+  path: string,
+): Promise<Record<string, unknown>[]> {
+  const file = await asyncBufferFromUrl({ url: path });
+  return (await parquetReadObjects({ file })) as Record<string, unknown>[];
+}

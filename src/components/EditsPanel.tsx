@@ -46,31 +46,42 @@ function formatOverride(o: OverrideSpec): { label: string; summary: string } {
   return { label, summary: `mean shifted to ${o.target_mean}` };
 }
 
+const DEFAULT_SEED = 42;
+
 export function EditsPanel() {
   const edits = useStore((s) => s.edits);
   const overrides = useStore((s) => s.overrides);
-  const previousEdits = useStore((s) => s.previousEdits);
-  const previousOverrides = useStore((s) => s.previousOverrides);
+  const appliedEdits = useStore((s) => s.appliedEdits);
+  const appliedOverrides = useStore((s) => s.appliedOverrides);
   const runStatus = useStore((s) => s.runStatus);
   const setSelected = useStore((s) => s.setSelected);
   const clearAllEdits = useStore((s) => s.clearAllEdits);
   const clearEdit = useStore((s) => s.clearEdit);
   const clearOverride = useStore((s) => s.clearOverride);
+  const seed = useStore((s) => s.seed);
+  const appliedSeed = useStore((s) => s.appliedSeed);
+  const setSeed = useStore((s) => s.setSeed);
 
-  if (edits.size === 0 && overrides.size === 0) return null;
+  // Seed counts as a tracked edit when it differs from the canonical default
+  // (42) that the registry-baseline manifest was generated under.
+  const seedEdited = seed !== DEFAULT_SEED;
 
-  const total = edits.size + overrides.size;
+  if (edits.size === 0 && overrides.size === 0 && !seedEdited) return null;
 
+  const total = edits.size + overrides.size + (seedEdited ? 1 : 0);
+
+  const seedUnapplied = seedEdited && appliedSeed !== seed;
   const hasUnapplied =
     runStatus !== "running" && runStatus !== "loading" &&
-    (edits.size !== previousEdits.size ||
-      overrides.size !== previousOverrides.size ||
+    (seedUnapplied ||
+      edits.size !== appliedEdits.size ||
+      overrides.size !== appliedOverrides.size ||
       ![...edits.entries()].every(([k, v]) => {
-        const prev = previousEdits.get(k);
+        const prev = appliedEdits.get(k);
         return prev && JSON.stringify(prev) === JSON.stringify(v);
       }) ||
       ![...overrides.entries()].every(([k, v]) => {
-        const prev = previousOverrides.get(k);
+        const prev = appliedOverrides.get(k);
         return prev && JSON.stringify(prev) === JSON.stringify(v);
       }));
 
@@ -143,6 +154,35 @@ export function EditsPanel() {
       {hasUnapplied && (
         <div style={{ fontSize: 10, color: "#a4570e", marginBottom: 6, fontStyle: "italic" }}>
           Values changed since last run — click Recompute to apply.
+        </div>
+      )}
+
+      {seedEdited && (
+        <div style={{ marginBottom: 6 }}>
+          <div style={{ fontSize: 9, color: "#999", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3, fontWeight: 600 }}>
+            RNG
+          </div>
+          <div style={rowStyle}>
+            <span
+              style={{ flex: 1, color: "#222", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+              title="numpy.default_rng seed drives every bootstrap resample; baseline manifest uses seed=42"
+            >
+              PRNG seed
+            </span>
+            <span style={{ color: "#a4570e", fontVariantNumeric: "tabular-nums", flexShrink: 0, fontWeight: 500 }}>
+              {appliedSeed !== null && appliedSeed !== seed
+                ? `${appliedSeed} → ${seed}`
+                : seed}
+            </span>
+            <button
+              type="button"
+              onClick={() => setSeed(DEFAULT_SEED)}
+              style={revertBtn}
+              title="revert to 42"
+            >
+              revert
+            </button>
+          </div>
         </div>
       )}
 

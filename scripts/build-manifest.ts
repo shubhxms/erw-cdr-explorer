@@ -1,10 +1,14 @@
 /**
- * Build manifest.json from public/checkpoints/.
+ * Build manifest.json from public/checkpoints/<removalId>/.
+ *
+ * Usage: tsx scripts/build-manifest.ts <removalId>
+ *   e.g. tsx scripts/build-manifest.ts rmv_1KH3W7FMH1S0J5R9
+ *
  * For each parquet [N] array: load, compute summary stats + 32-bin histogram.
  * For each scalar JSON: pass through value.
  * For each dataframe parquet: record row count.
  *
- * Output: public/checkpoints/manifest.json (consumed by the React app).
+ * Output: public/checkpoints/<removalId>/manifest.json (consumed by the app).
  */
 
 import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
@@ -15,8 +19,14 @@ import { asyncBufferFromFile, parquetReadObjects, parquetMetadataAsync } from "h
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
-const CHECKPOINT_DIR = join(ROOT, "public", "checkpoints");
-const PUBLIC_PREFIX = "/checkpoints";
+
+const REMOVAL_ID = process.argv[2];
+if (!REMOVAL_ID) {
+  console.error("usage: tsx scripts/build-manifest.ts <removalId>");
+  process.exit(2);
+}
+const CHECKPOINT_DIR = join(ROOT, "public", "checkpoints", REMOVAL_ID);
+const PUBLIC_PREFIX = `/checkpoints/${REMOVAL_ID}`;
 
 // ---------------------------------------------------------------------------
 // types
@@ -330,7 +340,7 @@ async function main() {
 
   const manifest: Manifest = {
     generated_at: new Date().toISOString(),
-    registry_p16: 4704,
+    registry_p16: 4703.709,
     computed_p16,
     total_duration_s,
     entries,
@@ -341,7 +351,7 @@ async function main() {
 
   const sizeKb = Math.round(statSync(outPath).size / 1024);
   console.log(`\nwrote ${outPath} (${sizeKb} KB, ${Object.keys(entries).length} entries)`);
-  console.log(`computed_p16 = ${computed_p16}, registry = 4704`);
+  console.log(`computed_p16 = ${computed_p16}, registry = 4703.709`);
 }
 
 main().catch((e) => {

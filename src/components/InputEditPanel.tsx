@@ -1,5 +1,5 @@
 /**
- * Sidebar-embedded edit panel for the S1 inputs:
+ * Sidebar-embedded edit panel for the input nodes:
  *   - inputs/area_hectares          → three plot-level scalar inputs
  *   - inputs/feedstock_samples      → per-column transform UI (Ca/Mg/Ti)
  *   - inputs/bulk_density_samples   → per-column transform UI (bulk_density)
@@ -33,7 +33,7 @@ const DEFAULT_AREAS: Record<string, number> = {
   control: 67.06,
 };
 
-export function S1EditPanel({ nodeId }: Props) {
+export function InputEditPanel({ nodeId }: Props) {
   if (nodeId === "inputs/area_hectares") return <AreaEdits />;
   if (nodeId === "inputs/feedstock_samples")
     return <ColumnTransformPanel nodeId="inputs/feedstock_samples" columns={FEEDSTOCK_COLUMNS} />;

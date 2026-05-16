@@ -18,6 +18,19 @@ export interface CheckpointNodeData extends Record<string, unknown> {
   unit?: string;
 }
 
+/**
+ * Number of invisible handles per side. Multiple handles spread the
+ * source/target points of edges along the node's vertical edge so that
+ * fan-out from one node (or fan-in to one node) does not stack on a
+ * single point — the routing in canvas/layout.ts assigns each edge to a
+ * specific slot.
+ */
+export const HANDLE_COUNT = 9;
+export const HANDLE_YS = Array.from(
+  { length: HANDLE_COUNT },
+  (_, i) => (i + 1) / (HANDLE_COUNT + 1),
+);
+
 function Sparkline({ bins, color = "#555", opacity = 1 }: { bins: number[]; color?: string; opacity?: number }) {
   const w = 200;
   const h = 22;
@@ -45,7 +58,8 @@ function Sparkline({ bins, color = "#555", opacity = 1 }: { bins: number[]; colo
 
 function CheckpointNodeImpl({ data, selected }: NodeProps) {
   const d = data as CheckpointNodeData;
-  const manifest = useManifest();
+  const removalId = useStore((s) => s.removalId);
+  const { manifest } = useManifest(removalId);
   const entry = manifest?.entries[d.id];
   const selectedId = useStore((s) => s.selectedId);
   const isSelected = selected || selectedId === d.id;
@@ -64,42 +78,37 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
   const hasOverride = useStore((s) => s.overrides.has(d.id));
   const wasOverridden = useStore((s) => s.overriddenSet.has(d.id));
 
-  // Overlay: previous run's values for nodes that changed.
-  const dirtySet = useStore((s) => s.dirtySet);
-  const previousValues = useStore((s) => s.previousValues);
-  const isDirty = dirtySet.has(d.id);
-  const prevVal = isDirty ? previousValues.get(d.id) : undefined;
-  // Fall back to manifest for "before" state when previousValues is empty (first run).
-  const prevArr = prevVal?.kind === "array" ? prevVal : undefined;
-  const prevHist = prevArr?.histogram ?? (isDirty ? entry?.histogram : undefined);
-  const prevStats = prevArr?.stats ?? (isDirty ? entry?.stats : undefined);
-  const prevScalar = prevVal?.kind === "scalar"
-    ? prevVal.value
-    : isDirty && entry?.kind === "scalar"
-      ? entry.value
-      : undefined;
-
-  const isComputed = computedSet.has(d.id);
+  // Canvas thumbnail semantics mirror the sidebar exactly:
+  //   - registry baseline (manifest) is the faded gray background sparkline,
+  //     always present if the manifest has it.
+  //   - current (this-browser-run) is the colored foreground sparkline,
+  //     only present when a run has actually computed this node.
+  //   - headline number prefers current; shows Δ vs baseline if both exist
+  //     and they differ.
   const isRunning = runStatus === "running";
   const isComputingNow = currentlyComputing === d.id;
-  const showData = isComputed;
+  const hasComputed = computedValue !== undefined;
 
-  // Prefer freshly-computed values during/after a run; fall back to manifest.
-  const liveHist =
-    computedValue?.kind === "array" ? computedValue.histogram : entry?.histogram;
-  const liveStats = computedValue?.kind === "array" ? computedValue.stats : entry?.stats;
-  const liveScalar =
-    computedValue?.kind === "scalar"
-      ? computedValue.value
-      : entry?.kind === "scalar"
-        ? entry.value
-        : undefined;
-  const liveRows =
-    computedValue?.kind === "dataframe"
-      ? computedValue.rowCount
-      : entry?.kind === "dataframe"
-        ? entry.row_count
-        : undefined;
+  const baselineHist = entry?.kind === "array" ? entry.histogram : undefined;
+  const baselineStats = entry?.kind === "array" ? entry.stats : undefined;
+  const baselineScalar = entry?.kind === "scalar" ? entry.value : undefined;
+  const baselineRows = entry?.kind === "dataframe" ? entry.row_count : undefined;
+
+  const currentHist =
+    computedValue?.kind === "array" ? computedValue.histogram : undefined;
+  const currentStats =
+    computedValue?.kind === "array" ? computedValue.stats : undefined;
+  const currentScalar =
+    computedValue?.kind === "scalar" ? computedValue.value : undefined;
+  const currentRows =
+    computedValue?.kind === "dataframe" ? computedValue.rowCount : undefined;
+
+  // showData decides whether the node card looks "live" or "queued".
+  // We have data whenever there's either a fresh computed value or a manifest
+  // baseline. Otherwise the run is still in progress for this node.
+  const showData =
+    hasComputed ||
+    (!isRunning && (computedSet.has(d.id) || baselineHist || baselineScalar !== undefined || baselineRows !== undefined));
 
   const headline = (() => {
     if (!showData) {
@@ -107,25 +116,35 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
       if (isRunning) return "queued";
       return "—";
     }
-    if (typeof liveScalar === "number") {
-      let text = formatNumber(liveScalar);
+    // scalar
+    const scalarVal = currentScalar ?? baselineScalar;
+    if (typeof scalarVal === "number") {
+      let text = formatNumber(scalarVal);
       if (d.unit) text += ` ${d.unit}`;
-      if (isDirty && typeof prevScalar === "number") {
-        const delta = liveScalar - prevScalar;
+      if (
+        typeof currentScalar === "number" &&
+        typeof baselineScalar === "number" &&
+        currentScalar !== baselineScalar
+      ) {
+        const delta = currentScalar - baselineScalar;
         text += ` (${delta >= 0 ? "+" : ""}${formatNumber(delta)})`;
       }
       return text;
     }
-    if (liveStats) {
-      let text = `μ=${formatNumber(liveStats.mean)}`;
+    // array
+    const arrStats = currentStats ?? baselineStats;
+    if (arrStats) {
+      let text = `μ=${formatNumber(arrStats.mean)}`;
       if (d.unit) text += ` ${d.unit}`;
-      if (isDirty && prevStats) {
-        const delta = liveStats.mean - prevStats.mean;
+      if (currentStats && baselineStats && currentStats.mean !== baselineStats.mean) {
+        const delta = currentStats.mean - baselineStats.mean;
         text += ` (${delta >= 0 ? "+" : ""}${formatNumber(delta)})`;
       }
       return text;
     }
-    if (typeof liveRows === "number") return `${liveRows} rows`;
+    // dataframe
+    const rows = currentRows ?? baselineRows;
+    if (typeof rows === "number") return `${rows} rows`;
     return "—";
   })();
 
@@ -156,7 +175,19 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
           : undefined,
       }}
     >
-      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+      {/* Multiple invisible target handles, spread vertically so incoming
+       *  edges leave the source from distinct y positions instead of all
+       *  stacking on the center handle. Slot assignment happens in
+       *  canvas/layout.ts based on each edge's fan-in index. */}
+      {HANDLE_YS.map((y, i) => (
+        <Handle
+          key={`t${i}`}
+          id={`t${i}`}
+          type="target"
+          position={Position.Left}
+          style={{ top: `${y * 100}%`, opacity: 0, pointerEvents: "none" }}
+        />
+      ))}
       <div style={{ display: "flex", justifyContent: "space-between", gap: 4 }}>
         <span
           style={{
@@ -184,16 +215,17 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
         </span>
       </div>
       <div style={{ height: 24, display: "flex", alignItems: "center", position: "relative" }}>
-        {showData && isDirty && prevHist && (
+        {showData && baselineHist && (
           <div style={{ position: "absolute", inset: 0 }}>
-            <Sparkline bins={prevHist.bins} color="#999" opacity={0.4} />
+            <Sparkline bins={baselineHist.bins} color="#999" opacity={0.35} />
           </div>
         )}
-        {showData && liveHist ? (
-          <Sparkline bins={liveHist.bins} />
-        ) : isComputingNow ? (
-          <ProgressBar color={STAGE_COLOR[d.stage]} />
-        ) : null}
+        {showData && currentHist && (
+          <div style={{ position: "relative", width: "100%" }}>
+            <Sparkline bins={currentHist.bins} color="#1850c8" />
+          </div>
+        )}
+        {!showData && isComputingNow && <ProgressBar color={STAGE_COLOR[d.stage]} />}
       </div>
       <div
         style={{
@@ -212,7 +244,15 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
               : ""}
         </span>
       </div>
-      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+      {HANDLE_YS.map((y, i) => (
+        <Handle
+          key={`s${i}`}
+          id={`s${i}`}
+          type="source"
+          position={Position.Right}
+          style={{ top: `${y * 100}%`, opacity: 0, pointerEvents: "none" }}
+        />
+      ))}
     </div>
   );
 }

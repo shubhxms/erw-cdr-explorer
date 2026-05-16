@@ -23,11 +23,11 @@ const LIBRARY_VERSION = "0.21.4";
 export type WorkerInbound =
   | {
       type: "run";
+      removalId: string;
       nRuns: number;
       seed: number;
       edits?: EditSpec[];
       overrides?: OverrideSpec[];
-      skipNodeIds?: string[];
     }
   | { type: "abort" };
 
@@ -41,10 +41,9 @@ export type WorkerOutbound =
       histogram: Hist;
       durationMs: number;
       overridden?: boolean;
-      cached?: boolean;
     }
-  | { type: "scalar"; nodeId: string; value: number; durationMs: number; cached?: boolean }
-  | { type: "dataframe"; nodeId: string; rowCount: number; columns: string[]; durationMs: number; cached?: boolean }
+  | { type: "scalar"; nodeId: string; value: number; durationMs: number }
+  | { type: "dataframe"; nodeId: string; rowCount: number; columns: string[]; durationMs: number }
   | { type: "complete"; p16: number; totalMs: number }
   | { type: "error"; message: string };
 
@@ -133,12 +132,12 @@ const INPUT_FILES = [
   "area_hectares.parquet",
 ];
 
-async function loadInputs() {
+async function loadInputs(removalId: string) {
   post({ type: "phase", phase: "fetching-inputs" });
   pyodide.FS.mkdirTree("/inputs");
   for (const name of INPUT_FILES) {
-    const r = await fetch(`/checkpoints/inputs/${name}`);
-    if (!r.ok) throw new Error(`fetch ${name} → HTTP ${r.status}`);
+    const r = await fetch(`/checkpoints/${removalId}/inputs/${name}`);
+    if (!r.ok) throw new Error(`fetch ${name} for ${removalId} → HTTP ${r.status}`);
     const buf = new Uint8Array(await r.arrayBuffer());
     pyodide.FS.writeFile(`/inputs/${name}`, buf);
   }
@@ -149,31 +148,30 @@ async function loadInputs() {
 // ---------------------------------------------------------------------------
 
 async function run(
+  removalId: string,
   nRuns: number,
   seed: number,
   edits: EditSpec[],
   overrides: OverrideSpec[],
-  skipNodeIds: string[],
 ) {
   abortFlag = false;
   try {
     await ensurePyodide();
-    await loadInputs();
+    await loadInputs(removalId);
     post({ type: "phase", phase: "running" });
 
     pyodide.globals.set("N_RUNS", nRuns);
     pyodide.globals.set("SEED", seed);
     pyodide.globals.set("EDITS_JSON", JSON.stringify(edits));
     pyodide.globals.set("OVERRIDES_JSON", JSON.stringify(overrides));
-    pyodide.globals.set("SKIP_NODE_IDS_JSON", JSON.stringify(skipNodeIds));
     pyodide.FS.writeFile("/chain.py", chainPySrc);
     await pyodide.runPythonAsync(`
-import importlib, sys
+import sys
 if "chain" in sys.modules:
     del sys.modules["chain"]
 sys.path.insert(0, "/")
 import chain
-chain.main(N_RUNS, SEED, EDITS_JSON, OVERRIDES_JSON, SKIP_NODE_IDS_JSON)
+chain.main(N_RUNS, SEED, EDITS_JSON, OVERRIDES_JSON)
 `);
   } catch (e) {
     if (!abortFlag) {
@@ -197,6 +195,6 @@ ctx.addEventListener("message", (e: MessageEvent<WorkerInbound>) => {
     return;
   }
   if (msg.type === "run") {
-    void run(msg.nRuns, msg.seed, msg.edits ?? [], msg.overrides ?? [], msg.skipNodeIds ?? []);
+    void run(msg.removalId, msg.nRuns, msg.seed, msg.edits ?? [], msg.overrides ?? []);
   }
 });

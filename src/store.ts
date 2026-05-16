@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import { coneOf, coneOfEdge, descendantsOf } from "./dag/graph";
+import { coneOf, coneOfEdge } from "./dag/graph";
 import { NODES } from "./dag/nodes";
+import { DEFAULT_REMOVAL_ID } from "./data/removals";
 import type { ArrayStats, Hist } from "./types/computed";
 import type { EditSpec, OverrideSpec } from "./types/edits";
 import ChainWorker from "./worker/chainWorker?worker";
@@ -31,6 +32,10 @@ export type ComputedValue =
   | { kind: "dataframe"; rowCount: number; columns: string[]; durationMs: number };
 
 interface StoreState {
+  /** Active Isometric removal id (e.g. rmv_1KH3W7FMH1S0J5R9). Drives which
+   *  manifest + checkpoint dir the rest of the app reads from. */
+  removalId: string;
+
   selectedId: string | null;
   selection: Selection;
   highlighted: Set<string> | null;
@@ -52,21 +57,33 @@ interface StoreState {
   /** Subset of computedSet flagged `overridden` by the worker on the last run. */
   overriddenSet: Set<string>;
 
-  // Cross-run memoization: previous run state for computing dirty sets.
-  previousEdits: Map<string, EditSpec>;
-  previousOverrides: Map<string, OverrideSpec>;
-  /** Nodes whose values changed between previous run and current run. */
-  dirtySet: Set<string>;
-  /** Previous run's computed values, used for overlay comparison. */
-  previousValues: Map<string, ComputedValue>;
+  /**
+   * Snapshot of edits/overrides as of the last completed run — used by the
+   * EditsPanel to flag "this edit hasn't been applied yet, click Run".
+   * The CURRENT vs REGISTRY BASELINE comparison itself does *not* depend on
+   * this — those come straight from `computedValues` (current) and
+   * `manifest.entries[id].histogram` (baseline).
+   */
+  appliedEdits: Map<string, EditSpec>;
+  appliedOverrides: Map<string, OverrideSpec>;
+  /** Seed of the last completed run. null = no run finished yet. */
+  appliedSeed: number | null;
 
   setSelected: (id: string | null) => void;
   selectEdge: (from: string, to: string) => void;
   clearSelection: () => void;
 
+  /**
+   * Switch to a different removal. Resets all run/edit/override state — the
+   * comparison context (CURRENT vs REGISTRY BASELINE) only makes sense within
+   * one removal at a time.
+   */
+  setRemovalId: (id: string) => void;
+
   startRun: () => void;
   cancelRun: () => void;
   setNRuns: (n: number) => void;
+  setSeed: (n: number) => void;
 
   setEdit: (key: string, edit: EditSpec) => void;
   clearEdit: (key: string) => void;
@@ -83,112 +100,8 @@ export function editKey(e: EditSpec): string {
 
 let worker: Worker | null = null;
 
-function computeDirtySet(
-  currentEdits: Map<string, EditSpec>,
-  currentOverrides: Map<string, OverrideSpec>,
-  previousEdits: Map<string, EditSpec>,
-  previousOverrides: Map<string, OverrideSpec>,
-): Set<string> {
-  const dirty = new Set<string>();
-
-  const editChanged =
-    currentEdits.size !== previousEdits.size ||
-    ![...currentEdits.entries()].every(([k, v]) => {
-      const prev = previousEdits.get(k);
-      return prev && JSON.stringify(prev) === JSON.stringify(v);
-    });
-
-  const overrideChanged =
-    currentOverrides.size !== previousOverrides.size ||
-    ![...currentOverrides.entries()].every(([k, v]) => {
-      const prev = previousOverrides.get(k);
-      return prev && JSON.stringify(prev) === JSON.stringify(v);
-    });
-
-  if (!editChanged && !overrideChanged) return dirty;
-
-  // If any constant (scalar/toggle) changed, everything downstream of inputs is dirty.
-  // Constants aren't DAG nodes so we conservatively mark everything dirty.
-  const prevConstantKeys = new Set(
-    [...previousEdits.entries()]
-      .filter(([, e]) => e.kind === "scalar" || e.kind === "toggle")
-      .map(([k]) => k),
-  );
-  const curConstantKeys = new Set(
-    [...currentEdits.entries()]
-      .filter(([, e]) => e.kind === "scalar" || e.kind === "toggle")
-      .map(([k]) => k),
-  );
-  const anyConstantChanged =
-    prevConstantKeys.size !== curConstantKeys.size ||
-    [...prevConstantKeys].some((k) => {
-      const cur = currentEdits.get(k);
-      const prev = previousEdits.get(k);
-      return !cur || !prev || JSON.stringify(cur) !== JSON.stringify(prev);
-    }) ||
-    [...curConstantKeys].some((k) => !prevConstantKeys.has(k));
-
-  if (anyConstantChanged) {
-    for (const n of NODES) dirty.add(n.id);
-    // Still add override-dirty nodes
-  }
-
-  // Column transforms: mark the input node + all descendants dirty.
-  for (const [key, edit] of currentEdits.entries()) {
-    if (edit.kind === "column_transform") {
-      const prev = previousEdits.get(key);
-      if (!prev || JSON.stringify(prev) !== JSON.stringify(edit)) {
-        dirty.add(edit.nodeId);
-        for (const d of descendantsOf(edit.nodeId)) dirty.add(d);
-      }
-    }
-  }
-  // Check removed column transforms
-  for (const [key, prev] of previousEdits.entries()) {
-    if (prev.kind === "column_transform" && !currentEdits.has(key)) {
-      dirty.add(prev.nodeId);
-      for (const d of descendantsOf(prev.nodeId)) dirty.add(d);
-    }
-  }
-
-  // Area edits: mark the relevant aggregation node + descendants dirty.
-  for (const [key, edit] of currentEdits.entries()) {
-    if (edit.kind === "area") {
-      const prev = previousEdits.get(key);
-      if (!prev || prev.value !== edit.value) {
-        const aggId = `aggregation/${edit.plotType}_co2_tonnes`;
-        dirty.add(aggId);
-        for (const d of descendantsOf(aggId)) dirty.add(d);
-      }
-    }
-  }
-  for (const [key, prev] of previousEdits.entries()) {
-    if (prev.kind === "area" && !currentEdits.has(key)) {
-      const aggId = `aggregation/${prev.plotType}_co2_tonnes`;
-      dirty.add(aggId);
-      for (const d of descendantsOf(aggId)) dirty.add(d);
-    }
-  }
-
-  // Override changes: mark the node + all descendants dirty.
-  for (const [nodeId, ovr] of currentOverrides.entries()) {
-    const prev = previousOverrides.get(nodeId);
-    if (!prev || JSON.stringify(prev) !== JSON.stringify(ovr)) {
-      dirty.add(nodeId);
-      for (const d of descendantsOf(nodeId)) dirty.add(d);
-    }
-  }
-  for (const [nodeId, prev] of previousOverrides.entries()) {
-    if (!currentOverrides.has(nodeId)) {
-      dirty.add(nodeId);
-      for (const d of descendantsOf(nodeId)) dirty.add(d);
-    }
-  }
-
-  return dirty;
-}
-
 export const useStore = create<StoreState>((set, get) => ({
+  removalId: DEFAULT_REMOVAL_ID,
   selectedId: null,
   selection: { kind: "none", id: null },
   highlighted: null,
@@ -198,7 +111,7 @@ export const useStore = create<StoreState>((set, get) => ({
   computedSet: allComputed(),
   computedValues: new Map(),
   currentlyComputing: null,
-  nRuns: 10000,
+  nRuns: 200000,
   seed: 42,
   computedP16: null,
   runDurationMs: null,
@@ -208,10 +121,9 @@ export const useStore = create<StoreState>((set, get) => ({
   overrides: new Map(),
   overriddenSet: new Set(),
 
-  previousEdits: new Map(),
-  previousOverrides: new Map(),
-  dirtySet: new Set(),
-  previousValues: new Map(),
+  appliedEdits: new Map(),
+  appliedOverrides: new Map(),
+  appliedSeed: null,
 
   setSelected: (id) =>
     set(
@@ -228,7 +140,39 @@ export const useStore = create<StoreState>((set, get) => ({
   clearSelection: () =>
     set({ selectedId: null, selection: { kind: "none", id: null }, highlighted: null }),
 
+  setRemovalId: (id) => {
+    // Stop any in-flight worker — its inputs would be from the old removal.
+    if (worker) {
+      worker.terminate();
+      worker = null;
+    }
+    set({
+      removalId: id,
+      selectedId: null,
+      selection: { kind: "none", id: null },
+      highlighted: null,
+      runStatus: "idle",
+      runPhase: null,
+      computedSet: allComputed(),
+      computedValues: new Map(),
+      currentlyComputing: null,
+      computedP16: null,
+      runDurationMs: null,
+      runError: null,
+      edits: new Map(),
+      overrides: new Map(),
+      overriddenSet: new Set(),
+      appliedEdits: new Map(),
+      appliedOverrides: new Map(),
+      appliedSeed: null,
+    });
+  },
+
   setNRuns: (n) => set({ nRuns: n }),
+  setSeed: (n) => {
+    if (!Number.isInteger(n)) return;
+    set({ seed: n });
+  },
 
   startRun: () => {
     if (!worker) {
@@ -238,51 +182,25 @@ export const useStore = create<StoreState>((set, get) => ({
 
     const s = get();
 
-    // Compute the dirty set — nodes that need recomputation.
-    const dirty = computeDirtySet(s.edits, s.overrides, s.previousEdits, s.previousOverrides);
-
-    // Skip nodes that are NOT dirty and already have cached values.
-    const skipNodeIds = NODES.filter((n) => !dirty.has(n.id)).map((n) => n.id);
-
-    // Save previous run values for overlay comparison.
-    const previousValues = new Map(s.computedValues);
-    // For clean nodes, carry forward their previous computed values.
-    const initialValues = new Map<string, ComputedValue>();
-    for (const [id, val] of s.computedValues.entries()) {
-      if (!dirty.has(id)) {
-        initialValues.set(id, val);
-      }
-    }
-
-    // Compute initial computedSet: all non-dirty nodes are already "computed".
-    const initialComputedSet = new Set<string>();
-    for (const n of NODES) {
-      if (!dirty.has(n.id) && s.computedSet.has(n.id)) {
-        initialComputedSet.add(n.id);
-      }
-    }
-
     set({
       runStatus: "loading",
       runPhase: "loading-pyodide",
-      computedSet: initialComputedSet,
-      computedValues: initialValues,
+      computedSet: new Set(),
+      computedValues: new Map(),
       currentlyComputing: null,
       computedP16: null,
       runDurationMs: null,
       runError: null,
       overriddenSet: new Set(),
-      dirtySet: dirty,
-      previousValues: previousValues,
     });
 
     const msg: WorkerInbound = {
       type: "run",
+      removalId: s.removalId,
       nRuns: s.nRuns,
       seed: s.seed,
       edits: [...s.edits.values()],
       overrides: [...s.overrides.values()],
-      skipNodeIds,
     };
     worker.postMessage(msg);
   },
@@ -327,7 +245,7 @@ export const useStore = create<StoreState>((set, get) => ({
       return { overrides: m };
     }),
   clearAllEdits: () =>
-    set({ edits: new Map(), overrides: new Map() }),
+    set({ edits: new Map(), overrides: new Map(), seed: 42 }),
 }));
 
 function onWorkerMessage(e: MessageEvent<WorkerOutbound>) {
@@ -402,8 +320,9 @@ function onWorkerMessage(e: MessageEvent<WorkerOutbound>) {
         currentlyComputing: null,
         computedP16: msg.p16,
         runDurationMs: msg.totalMs,
-        previousEdits: new Map(s.edits),
-        previousOverrides: new Map(s.overrides),
+        appliedEdits: new Map(s.edits),
+        appliedOverrides: new Map(s.overrides),
+        appliedSeed: s.seed,
       }));
       break;
     }

@@ -1,8 +1,8 @@
 """
-EW CDR chain — Pyodide port of run_chain.py.
+EW CDR chain — Pyodide-side calculation.
 
 Wraps the real `isometric_calculation_library` calculation so the browser
-result matches code.py / the registry (p16 ≈ 4704) bit-for-bit aside from
+result matches the registry value (p16 ≈ 4703.709) bit-for-bit aside from
 floating-point determinism.
 
 Bridges to JS via the `bridge.send(json_str)` callable injected from the
@@ -63,7 +63,7 @@ from isometric_calculation_library.enhanced_weathering.utils.tracer import (
 
 import bridge  # type: ignore  # registered from JS via pyodide.registerJsModule
 
-# -- constants (mirror code.py / run_chain.py) -------------------------------
+# -- constants ---------------------------------------------------------------
 
 CATIONS = ["Ca", "Mg"]
 SAMPLING_DEPTH_CM = 30.0
@@ -152,15 +152,6 @@ def _apply_override(arr, override):
 
 # Populated at the top of run(); track_array reads from this dict.
 _OVERRIDES = {}
-
-# Node-level value cache: survives across runs so that clean nodes can
-# reuse previous results without recomputation.  Each entry stores the
-# computed value (numpy array, float, or DataFrame) plus the wire-format
-# message that was posted to JS — so we can replay it cheaply.
-_VALUE_CACHE: dict = {}
-
-# Set of node IDs to skip (populated per-run from the skip_node_ids param).
-_SKIP: set = set()
 
 
 # Default chunk for the iteration-axis split below. At chunk_size=20_000 and
@@ -276,13 +267,6 @@ def stats(arr):
 
 
 def track_array(node_id, fn):
-    if node_id in _SKIP and node_id in _VALUE_CACHE:
-        cached = _VALUE_CACHE[node_id]
-        msg = dict(cached["msg"])
-        msg["cached"] = True
-        post({"type": "started", "nodeId": node_id})
-        post(msg)
-        return cached["value"]
     post({"type": "started", "nodeId": node_id})
     t0 = time.perf_counter()
     arr = fn()
@@ -304,48 +288,29 @@ def track_array(node_id, fn):
     msg = {"type": "array", "nodeId": node_id, "stats": s, "histogram": h, "durationMs": dt}
     if overridden:
         msg["overridden"] = True
-    _VALUE_CACHE[node_id] = {"value": arr, "msg": msg}
     post(msg)
     _check_abort()
     return arr
 
 
 def track_scalar(node_id, fn):
-    if node_id in _SKIP and node_id in _VALUE_CACHE:
-        cached = _VALUE_CACHE[node_id]
-        msg = dict(cached["msg"])
-        msg["cached"] = True
-        post({"type": "started", "nodeId": node_id})
-        post(msg)
-        return cached["value"]
     post({"type": "started", "nodeId": node_id})
     t0 = time.perf_counter()
     v = float(fn())
     dt = (time.perf_counter() - t0) * 1000
-    msg = {"type": "scalar", "nodeId": node_id, "value": v, "durationMs": dt}
-    _VALUE_CACHE[node_id] = {"value": v, "msg": msg}
-    post(msg)
+    post({"type": "scalar", "nodeId": node_id, "value": v, "durationMs": dt})
     _check_abort()
     return v
 
 
 def track_df(node_id, fn, columns):
-    if node_id in _SKIP and node_id in _VALUE_CACHE:
-        cached = _VALUE_CACHE[node_id]
-        msg = dict(cached["msg"])
-        msg["cached"] = True
-        post({"type": "started", "nodeId": node_id})
-        post(msg)
-        return cached["value"]
     post({"type": "started", "nodeId": node_id})
     t0 = time.perf_counter()
     df = fn()
     dt = (time.perf_counter() - t0) * 1000
     n = int(len(df)) if df is not None else 0
     cols = [str(c) for c in columns]
-    msg = {"type": "dataframe", "nodeId": node_id, "rowCount": n, "columns": cols, "durationMs": dt}
-    _VALUE_CACHE[node_id] = {"value": df, "msg": msg}
-    post(msg)
+    post({"type": "dataframe", "nodeId": node_id, "rowCount": n, "columns": cols, "durationMs": dt})
     _check_abort()
     return df
 
@@ -353,11 +318,10 @@ def track_df(node_id, fn, columns):
 # -- main chain --------------------------------------------------------------
 
 
-def run(n_runs, seed, edits_json="", overrides_json="", skip_node_ids_json=""):
-    global _OVERRIDES, _SKIP
+def run(n_runs, seed, edits_json="", overrides_json=""):
+    global _OVERRIDES
     edits = _parse_edits(edits_json)
     _OVERRIDES = _parse_overrides(overrides_json)
-    _SKIP = set(json.loads(skip_node_ids_json) if skip_node_ids_json else [])
 
     # Constants — pick up any scalar/toggle edits.
     application_rate_kg_ha = float(edits["scalars"].get(
@@ -766,9 +730,9 @@ def run(n_runs, seed, edits_json="", overrides_json="", skip_node_ids_json=""):
     post({"type": "complete", "p16": p16, "totalMs": total_ms})
 
 
-def main(n_runs, seed, edits_json="", overrides_json="", skip_node_ids_json=""):
+def main(n_runs, seed, edits_json="", overrides_json=""):
     try:
-        run(int(n_runs), int(seed), edits_json or "", overrides_json or "", skip_node_ids_json or "")
+        run(int(n_runs), int(seed), edits_json or "", overrides_json or "")
     except RuntimeError as e:
         if str(e) == "aborted":
             return

@@ -1,28 +1,42 @@
 # EW CDR Checkpoint Explorer
 
-Interactive DAG visualization of the Isometric enhanced-weathering CDR calculation for Alt Carbon's Darjeeling project. Every named intermediate in the calculation chain is a node — click to inspect distributions, edit inputs, and recompute in-browser.
+Interactive DAG visualization of the enhanced-weathering CDR calculation for **Alt Carbon's Darjeeling project** on the [Isometric registry](https://registry.isometric.com/supplier/spl_1J6EQFMYF1S00KDE#issuances). Every named intermediate in the chain is a node; click any node to inspect its distribution, edit inputs, and recompute in-browser.
+
+Specifically, this app reproduces the gross **CDR from weathering** figure for removal [rmv_1KH3W7FMH1S0J5R9](https://registry.isometric.com/removal/rmv_1KH3W7FMH1S0J5R9?tab=data-points) — independently computed `p16 = 4,703.71 tCO₂e` vs the registry-derived value `4,703.709 tCO₂e`.
+
+## Scope
+
+Only the soil-bootstrap + tracer-corrected mass-balance portion of the issuance is in scope. The final issued removal applies additional steps that this explorer does **not** model:
+
+- upstream activity emissions (flights, freight, spreading fuel, lab electricity)
+- weathering losses (strong acid weathering ≈ 508.75 tCO₂e, plant uptake ≈ 37.59 tCO₂e, counterfactual liming)
+- attribution factor (~36.87%)
+- downstream retention (river runoff 99.30%, ocean re-equilibration 78.80%)
 
 ## Features
 
-- **DAG Explorer** — 55 nodes across 7 stages (inputs, cleaning, bootstrap, deployment chain, treatment chain, diagnostics, aggregation), laid out with dagre and rendered via React Flow.
-- **In-browser Recomputation** — The full CDR chain runs in a Web Worker using Pyodide (Python/WASM) with the real `isometric_calculation_library`. No server required.
-- **Incremental Memoization** — On re-run, only nodes downstream of your edits are recalculated. Unaffected nodes reuse cached Python arrays instantly.
-- **Causal Edits** — Modify feedstock columns, bulk density, plot areas, or chain constants (application rate, sampling depth, winsorise threshold, zero filter). Changes propagate naturally through the DAG.
-- **Counterfactual Overrides** — Pin any intermediate array node to a chosen value (point-collapse or mean-shift) and observe the forward-only impact on downstream nodes.
-- **Change Overlay** — When values change, the previous run's distribution is shown as a translucent overlay on affected nodes and in the sidebar histogram/stats table, so you can compare before and after.
-- **Precomputed Manifest** — A build-time manifest (~110 KB) provides instant summary stats and 64-bin histograms for all nodes. Full arrays are lazy-loaded from parquet on demand.
+- **DAG explorer** — 71 nodes laid out by stage (inputs → cleaning → bootstrap → deployment chain → treatment chain → diagnostics → aggregation), rendered via React Flow + dagre.
+- **In-browser recompute** — The full chain runs in a Web Worker via Pyodide (Python in WebAssembly) using the real `isometric_calculation_library` (v0.21.4). No server.
+- **Causal edits** — Tweak feedstock columns, bulk density, plot areas, application rate, sampling depth, winsorise threshold, or zero-filter toggle.
+- **Counterfactual overrides** — Pin any `[N]` array node to a fixed value (point-collapse) or recenter it (mean-shift); propagation is forward-only by design.
+- **Current vs. baseline** — Each node compares this browser's freshly-computed result against the precomputed N=200k registry-matching baseline; sidebar histograms + stats tables show a Δ column.
+- **Precomputed manifest** — A build-time JSON manifest (~110 KB) provides instant summary stats + 64-bin histograms for all nodes. Full arrays lazy-load from parquet on demand.
 
 ## Stack
 
-Vite + React + TypeScript + React Router + @xyflow/react + dagre + Pyodide + hyparquet + uPlot + Zustand
+Vite + React + TypeScript + React Router + @xyflow/react + dagre + Pyodide + hyparquet + uPlot + Zustand.
 
 ## Develop
 
 ```
 npm install
-npm run build-manifest   # one-shot: scans public/checkpoints/ → manifest.json
-npm run dev              # http://localhost:5173
+npm run build-manifest -- rmv_1KH3W7FMH1S0J5R9   # builds manifest for one removal
+npm run dev                                       # http://localhost:5173
 ```
+
+Each removal lives under `public/checkpoints/<removalId>/` with its own
+`manifest.json`. Add a new removal by dropping its `inputs/ cleaning/ … `
+checkpoint tree under that path and rebuilding the manifest for that id.
 
 ## Build
 
@@ -33,16 +47,16 @@ npm run preview
 
 ## Data
 
-`public/checkpoints/` contains the Python chain's output. To refresh from a sibling data directory:
+`public/checkpoints/<removalId>/` contains the chain's pre-baked output (parquet + JSON checkpoints) for each removal. The active removal is selected via the topbar dropdown and persisted in the `?removal=…` URL query param. To refresh data for one removal:
 
 ```
-rm -rf public/checkpoints
-cp -R ../isometric-cdr-data/checkpoints public/
-npm run build-manifest
+rm -rf public/checkpoints/<removalId>
+cp -R ../isometric-cdr-data/checkpoints public/checkpoints/<removalId>
+npm run build-manifest -- <removalId>
 ```
 
-## Chain Methodology
+## Methodology
 
-Tracer-corrected Total Cation Approach using titanium as the immobile tracer, with paired baseline-to-reporting-period bootstrap and a p50 control-correction ratio. The final reported metric is p16 (16th percentile of total CO₂ tonnes) = 4,704 tonnes.
+Tracer-corrected Total Cation Approach using Ti as the immobile tracer, with paired baseline → reporting-period bootstrap and a p50 control-correction ratio applied to each cation. Final reported metric is the 16th percentile of total CO₂ tonnes.
 
-See `src/worker/chain.py` for the full calculation port and `src/dag/nodes.ts` for the DAG structure.
+See `src/worker/chain.py` for the in-browser calculation and `src/dag/nodes.ts` for the DAG topology.
