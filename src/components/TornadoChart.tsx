@@ -133,17 +133,6 @@ export function TornadoChart({
             >
               {row.label}
             </text>
-            {row.baselineValueLabel && (
-              <text
-                x={labelW - 8}
-                y={y + rowHeight / 2 + 17}
-                fontSize={9}
-                fill="#888"
-                textAnchor="end"
-              >
-                {row.baselineValueLabel}
-              </text>
-            )}
             {/* +10% bar */}
             <rect
               x={plusX}

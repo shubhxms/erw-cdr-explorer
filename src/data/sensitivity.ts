@@ -17,8 +17,6 @@ export interface SweepInputDef {
   id: string;
   label: string;
   unit?: string;
-  /** Optional human-readable baseline value to show in the chart panel. */
-  baselineValueLabel?: string;
   /** Build the perturbation EditSpec for sign ∈ {+1, −1} at the given scale. */
   buildEdit: (sign: 1 | -1, scale: number) => EditSpec;
 }
@@ -30,7 +28,6 @@ export const SWEEP_INPUTS: SweepInputDef[] = [
     id: "application_rate_kg_ha",
     label: "Application rate",
     unit: "kg/ha",
-    baselineValueLabel: `${APP_RATE_BASELINE.toLocaleString()} kg/ha`,
     buildEdit: (sign, scale) => ({
       kind: "scalar",
       nodeId: "constants/application_rate_kg_ha",
@@ -40,7 +37,6 @@ export const SWEEP_INPUTS: SweepInputDef[] = [
   {
     id: "feedstock_ca",
     label: "Feedstock Ca (mass fraction)",
-    baselineValueLabel: "× 1.00",
     buildEdit: (sign, scale) => ({
       kind: "column_transform",
       nodeId: "inputs/feedstock_samples",
@@ -52,7 +48,6 @@ export const SWEEP_INPUTS: SweepInputDef[] = [
   {
     id: "feedstock_mg",
     label: "Feedstock Mg (mass fraction)",
-    baselineValueLabel: "× 1.00",
     buildEdit: (sign, scale) => ({
       kind: "column_transform",
       nodeId: "inputs/feedstock_samples",
@@ -64,7 +59,6 @@ export const SWEEP_INPUTS: SweepInputDef[] = [
   {
     id: "feedstock_ti",
     label: "Feedstock Ti (tracer mass fraction)",
-    baselineValueLabel: "× 1.00",
     buildEdit: (sign, scale) => ({
       kind: "column_transform",
       nodeId: "inputs/feedstock_samples",
@@ -95,7 +89,6 @@ export interface SweepResultRow {
   id: string;
   label: string;
   unit?: string;
-  baselineValueLabel?: string;
   baselineP16: number;
   plusP16: number;
   minusP16: number;
@@ -126,7 +119,6 @@ export function rowsFromFile(file: SensitivityFile): SweepSummary {
       id: r.id,
       label: def?.label ?? r.id,
       unit: def?.unit,
-      baselineValueLabel: def?.baselineValueLabel,
       baselineP16: baseline,
       plusP16: r.plus_p16,
       minusP16: r.minus_p16,

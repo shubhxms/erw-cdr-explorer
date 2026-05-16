@@ -398,7 +398,6 @@ function finalizeSweep(s: StoreState): SweepState {
       id: def.id,
       label: def.label,
       unit: def.unit,
-      baselineValueLabel: def.baselineValueLabel,
       baselineP16: baseline,
       plusP16: pair.plus,
       minusP16: pair.minus,
