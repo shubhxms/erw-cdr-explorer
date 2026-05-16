@@ -49,7 +49,10 @@ export function Graph() {
       const isDiag =
         (baseStyle as { strokeDasharray?: string }).strokeDasharray !== undefined;
       if (!hl) {
-        return { ...e, style: { ...baseStyle, opacity: 0.85 } };
+        // No selection → edges recede to a faint structural backdrop so the
+        // canvas reads as nodes-in-columns rather than a wire diagram.
+        // Click any node to surface its cone of edges at full opacity.
+        return { ...e, style: { ...baseStyle, opacity: 0.35 } };
       }
       const both = hl.has(e.source) && hl.has(e.target);
       if (!both) {

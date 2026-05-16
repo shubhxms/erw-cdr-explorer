@@ -15,34 +15,99 @@
  */
 
 import type { Edge, Node } from "@xyflow/react";
-import { NODES, type Stage, type DagNode } from "../dag/nodes";
+import { NODES, type DagNode } from "../dag/nodes";
 import { EDGES } from "../dag/edges";
 import { HANDLE_COUNT, type CheckpointNodeData } from "./CheckpointNode";
 
 const NODE_W = 220;
 const NODE_H = 84;
-const COL_GAP = 380; // horizontal distance between columns (center-to-center)
-const ROW_GAP = 96; // vertical pitch within a column band (top-edge to top-edge)
+const ROW_GAP = 96; // vertical pitch within a cell (top-edge to top-edge)
 const BAND_GAP = 80; // extra vertical padding between bands sharing a column
 
-const COL_X: Record<Stage, number> = {
-  inputs: 0,
-  cleaning: 1 * COL_GAP,
-  bootstrap: 2 * COL_GAP,
-  chain_deployment: 3 * COL_GAP,
-  chain_treatment: 3 * COL_GAP,
-  aggregation: 4 * COL_GAP,
-  diagnostics: 4 * COL_GAP,
-};
+/**
+ * Column x positions. We split long stages into multiple semantic sub-columns
+ * so no single vertical strip has 15+ nodes:
+ *
+ *   col 0  inputs
+ *   col 1  cleaning
+ *   col 2  bootstrap · bulk-density + feedstock preprocessing
+ *   col 3  bootstrap · control correction
+ *   col 4  chain · pairing + Ti (mass_ratio, app_rate)
+ *   col 5  chain · Ca pipeline
+ *   col 6  chain · Mg pipeline + combined CO₂
+ *   col 7  aggregation + validation (banded)
+ *
+ * Sub-columns of the same logical stage sit 280 px apart; jumps between
+ * different stages are 380 px so the grouping reads visually.
+ */
+const COL_X: number[] = [
+  0,        // inputs
+  380,      // cleaning
+  760,      // bootstrap-A
+  1040,     // bootstrap-B
+  1420,     // chain-Ti
+  1700,     // chain-Ca
+  1980,     // chain-Mg+combined
+  2360,     // agg+validation
+];
 
 /**
- * Bands within a column. Stages listed top-to-bottom in their visual order.
- * Stages not listed here get their own dedicated column band at y = 0.
+ * Which sub-column does a bootstrap node belong to?
+ *   0 = bulk-density + feedstock
+ *   1 = control correction (paired + bl/rp/corr_boot/p50 for Ca + Mg)
  */
-const COLUMN_BANDS: Stage[][] = [
-  ["chain_deployment", "chain_treatment"],
-  ["aggregation", "diagnostics"],
-];
+function bootstrapSubCol(tail: string): 0 | 1 {
+  if (
+    tail === "bd_boot" ||
+    tail === "bd_mean" ||
+    tail === "soil_mass_kg_ha" ||
+    tail.startsWith("fs_")
+  ) {
+    return 0;
+  }
+  return 1;
+}
+
+/**
+ * Which sub-column does a chain_deployment / chain_treatment node belong to?
+ *   0 = pairing + Ti (paired, bl_ti, rp_ti, mass_ratio, app_rate_kg_ha)
+ *   1 = Ca pipeline (anything with _ca in the name)
+ *   2 = Mg pipeline + co2_combined
+ */
+function chainSubCol(tail: string): 0 | 1 | 2 {
+  if (
+    tail === "paired" ||
+    tail === "bl_ti" ||
+    tail === "rp_ti" ||
+    tail === "mass_ratio" ||
+    tail === "app_rate_kg_ha"
+  ) {
+    return 0;
+  }
+  if (tail.includes("_ca")) return 1;
+  return 2;
+}
+
+/** Map a DAG node to its visual (column index, band index) cell. */
+function cellFor(n: DagNode): { col: number; band: 0 | 1 } {
+  const tail = n.id.split("/")[1] ?? "";
+  switch (n.stage) {
+    case "inputs":
+      return { col: 0, band: 0 };
+    case "cleaning":
+      return { col: 1, band: 0 };
+    case "bootstrap":
+      return { col: 2 + bootstrapSubCol(tail), band: 0 };
+    case "chain_deployment":
+      return { col: 4 + chainSubCol(tail), band: 0 };
+    case "chain_treatment":
+      return { col: 4 + chainSubCol(tail), band: 1 };
+    case "aggregation":
+      return { col: 7, band: 0 };
+    case "diagnostics":
+      return { col: 7, band: 1 };
+  }
+}
 
 export interface LayoutResult {
   nodes: Node<CheckpointNodeData>[];
@@ -50,39 +115,31 @@ export interface LayoutResult {
 }
 
 export function computeLayout(): LayoutResult {
-  // Bucket nodes by stage, preserving file order from nodes.ts. We deliberately
-  // do NOT sort by `step` here — file order is a hand-curated grouping that
-  // keeps Ca and Mg pipelines visually contiguous in chain_deployment +
-  // chain_treatment, instead of interleaving them per step.
-  const byStage: Map<Stage, DagNode[]> = new Map();
+  // Bucket nodes by (column, band) cell, preserving file order from nodes.ts —
+  // keeps Ca/Mg pipelines, bd/fs groups, etc. visually contiguous.
+  const cells = new Map<string, DagNode[]>();
   for (const n of NODES) {
-    const arr = byStage.get(n.stage) ?? [];
+    const { col, band } = cellFor(n);
+    const key = `${col}:${band}`;
+    const arr = cells.get(key) ?? [];
     arr.push(n);
-    byStage.set(n.stage, arr);
+    cells.set(key, arr);
   }
 
-  // Assign y positions per stage. Stages sharing a column get stacked.
+  // For each column, lay out band 0 then band 1 with BAND_GAP between them.
   const positions = new Map<string, { x: number; y: number }>();
-  const stagesInBand = new Set<Stage>();
-  for (const band of COLUMN_BANDS) {
+  for (let col = 0; col < COL_X.length; col++) {
     let y = 0;
-    for (const stage of band) {
-      stagesInBand.add(stage);
-      const nodes = byStage.get(stage) ?? [];
+    let printedAny = false;
+    for (let band = 0; band < 2; band++) {
+      const nodes = cells.get(`${col}:${band}`) ?? [];
+      if (nodes.length === 0) continue;
+      if (printedAny) y += BAND_GAP;
       for (const n of nodes) {
-        positions.set(n.id, { x: COL_X[stage], y });
+        positions.set(n.id, { x: COL_X[col], y });
         y += ROW_GAP;
       }
-      y += BAND_GAP; // padding between stacked sub-stages
-    }
-  }
-  // Stages not in any band: laid out as a single band starting at y = 0.
-  for (const [stage, nodes] of byStage) {
-    if (stagesInBand.has(stage)) continue;
-    let y = 0;
-    for (const n of nodes) {
-      positions.set(n.id, { x: COL_X[stage], y });
-      y += ROW_GAP;
+      printedAny = true;
     }
   }
 
@@ -206,23 +263,27 @@ export function computeLayout(): LayoutResult {
   const edges: Edge[] = positioned.map((e) => {
     const s = srcSlot.get(e.origIdx) ?? mid;
     const t = tgtSlot.get(e.origIdx) ?? mid;
-    // Bezier (the react-flow "default" edge type) draws one smooth curve from
-    // source handle to target handle — no explicit vertical segment, so two
-    // edges sharing a target column can no longer collide on a single x-line.
-    // The slot assignment above guarantees the source/target endpoints are
-    // visually distinct; the curves between them spread naturally.
+    // Smoothstep (orthogonal "snake": right → down/up → right) is easier to
+    // trace than bezier curves between distant columns, which swoop and
+    // visually overlap. Per-edge `offset` is varied by source slot index so
+    // each edge's vertical turn happens at a distinct x — vertical segments
+    // don't stack into the same corridor. Main vs diagnostic also get
+    // different base offsets so the two kinds settle into different x-bands.
+    const baseOffset = e.kind === "diagnostic" ? 16 : 36;
+    const offset = baseOffset + s * 6;
     return {
       id: `e${e.origIdx}`,
       source: e.from,
       target: e.to,
       sourceHandle: `s${s}`,
       targetHandle: `t${t}`,
-      type: "default",
+      type: "smoothstep",
       animated: false,
+      pathOptions: { offset, borderRadius: 12 },
       style:
         e.kind === "diagnostic"
-          ? { stroke: "#b5a3c2", strokeDasharray: "3 4", strokeWidth: 1, opacity: 0.7 }
-          : { stroke: "#555", strokeWidth: 1.3 },
+          ? { stroke: "#b5a3c2", strokeDasharray: "3 4", strokeWidth: 0.9 }
+          : { stroke: "#555", strokeWidth: 1.0 },
     };
   });
 
