@@ -31,21 +31,65 @@ export const HANDLE_YS = Array.from(
   (_, i) => (i + 1) / (HANDLE_COUNT + 1),
 );
 
-function Sparkline({ bins, color = "#555", opacity = 1 }: { bins: number[]; color?: string; opacity?: number }) {
-  const w = 200;
-  const h = 22;
+/**
+ * Mini histogram preview for the node card. Bars are positioned by their
+ * actual bin edges (data values), not by index — so two sparklines sharing
+ * the same `xRange` will visually shift relative to each other when the
+ * underlying distribution shifts (e.g. an edit that shifts p16 up). The
+ * old index-based version laid out 64 bins across a fixed 200px regardless
+ * of where in data space the bins actually sat, which masked any
+ * shift-the-mean edit.
+ */
+function Sparkline({
+  bins,
+  edges,
+  xRange,
+  width = 204,
+  height = 22,
+  color = "#555",
+  opacity = 1,
+}: {
+  bins: number[];
+  edges: number[];
+  xRange: [number, number];
+  width?: number;
+  height?: number;
+  color?: string;
+  opacity?: number;
+}) {
+  const [xmin, xmax] = xRange;
+  const xspan = xmax - xmin;
   const max = Math.max(1, ...bins);
-  const bw = w / bins.length;
+  if (!Number.isFinite(xspan) || xspan <= 0 || edges.length !== bins.length + 1) {
+    // Degenerate: no spread (all-same values) or shape mismatch. Render a
+    // single centered marker so the row isn't blank.
+    return (
+      <svg width={width} height={height} style={{ display: "block" }}>
+        <rect
+          x={width / 2 - 2}
+          y={2}
+          width={4}
+          height={height - 4}
+          fill={color}
+          opacity={opacity}
+        />
+      </svg>
+    );
+  }
   return (
-    <svg width={w} height={h} style={{ display: "block" }}>
+    <svg width={width} height={height} style={{ display: "block" }}>
       {bins.map((b, i) => {
-        const bh = (b / max) * h;
+        const lo = edges[i];
+        const hi = edges[i + 1];
+        const x = ((lo - xmin) / xspan) * width;
+        const bw = ((hi - lo) / xspan) * width;
+        const bh = (b / max) * height;
         return (
           <rect
             key={i}
-            x={i * bw}
-            y={h - bh}
-            width={bw - 0.5}
+            x={x}
+            y={height - bh}
+            width={Math.max(0.6, bw - 0.3)}
             height={bh}
             fill={color}
             opacity={opacity}
@@ -90,6 +134,21 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
   const hasComputed = computedValue !== undefined;
 
   const baselineHist = entry?.kind === "array" ? entry.histogram : undefined;
+  // Shared x-range across baseline + current sparkline so they align on
+  // actual data values (and a shift-the-mean edit visibly moves bars).
+  const sparkXRange: [number, number] | undefined = (() => {
+    const ranges: [number, number][] = [];
+    const bEdges = baselineHist?.edges;
+    if (bEdges && bEdges.length >= 2) ranges.push([bEdges[0], bEdges[bEdges.length - 1]]);
+    const cEdges =
+      computedValue?.kind === "array" ? computedValue.histogram.edges : undefined;
+    if (cEdges && cEdges.length >= 2) ranges.push([cEdges[0], cEdges[cEdges.length - 1]]);
+    if (!ranges.length) return undefined;
+    return [
+      Math.min(...ranges.map((r) => r[0])),
+      Math.max(...ranges.map((r) => r[1])),
+    ];
+  })();
   const baselineStats = entry?.kind === "array" ? entry.stats : undefined;
   const baselineScalar = entry?.kind === "scalar" ? entry.value : undefined;
   const baselineRows = entry?.kind === "dataframe" ? entry.row_count : undefined;
@@ -154,12 +213,23 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
         width: 220,
         height: 84,
         background: showData ? "#fff" : "#eee",
-        border: isSelected
-          ? "2px solid #111"
-          : isComputingNow
-            ? `2px solid ${STAGE_COLOR[d.stage]}`
-            : "1px solid #ccc",
-        borderLeft: `4px solid ${showData ? STAGE_COLOR[d.stage] : "#bbb"}`,
+        // Use border longhands rather than the `border` shorthand. Setting
+        // the shorthand resets all four sides every render, and React skips
+        // re-applying `borderLeft` when its string value hasn't changed —
+        // so after a select→deselect cycle the stage color stripe was
+        // disappearing. Longhands avoid the cross-property reset.
+        borderTopWidth: isSelected ? 2 : isComputingNow ? 2 : 1,
+        borderTopStyle: "solid",
+        borderTopColor: isSelected ? "#111" : isComputingNow ? STAGE_COLOR[d.stage] : "#ccc",
+        borderRightWidth: isSelected ? 2 : isComputingNow ? 2 : 1,
+        borderRightStyle: "solid",
+        borderRightColor: isSelected ? "#111" : isComputingNow ? STAGE_COLOR[d.stage] : "#ccc",
+        borderBottomWidth: isSelected ? 2 : isComputingNow ? 2 : 1,
+        borderBottomStyle: "solid",
+        borderBottomColor: isSelected ? "#111" : isComputingNow ? STAGE_COLOR[d.stage] : "#ccc",
+        borderLeftWidth: 4,
+        borderLeftStyle: "solid",
+        borderLeftColor: showData ? STAGE_COLOR[d.stage] : "#bbb",
         borderRadius: 4,
         padding: "6px 8px",
         display: "flex",
@@ -215,14 +285,28 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
         </span>
       </div>
       <div style={{ height: 24, display: "flex", alignItems: "center", position: "relative" }}>
-        {showData && baselineHist && (
+        {showData && baselineHist && sparkXRange && (
           <div style={{ position: "absolute", inset: 0 }}>
-            <Sparkline bins={baselineHist.bins} color="#999" opacity={0.35} />
+            {/* Faded gray background when a CURRENT is overlaid; full opacity
+              * darker gray when standalone (pre-run). Bars positioned by their
+              * actual bin edges within the shared sparkXRange. */}
+            <Sparkline
+              bins={baselineHist.bins}
+              edges={baselineHist.edges}
+              xRange={sparkXRange}
+              color={currentHist ? "#999" : "#555"}
+              opacity={currentHist ? 0.35 : 1}
+            />
           </div>
         )}
-        {showData && currentHist && (
-          <div style={{ position: "relative", width: "100%" }}>
-            <Sparkline bins={currentHist.bins} color="#1850c8" />
+        {showData && currentHist && sparkXRange && (
+          <div style={{ position: "absolute", inset: 0 }}>
+            <Sparkline
+              bins={currentHist.bins}
+              edges={currentHist.edges}
+              xRange={sparkXRange}
+              color="#1850c8"
+            />
           </div>
         )}
         {!showData && isComputingNow && <ProgressBar color={STAGE_COLOR[d.stage]} />}
