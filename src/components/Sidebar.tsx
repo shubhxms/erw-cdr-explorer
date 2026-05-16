@@ -304,6 +304,26 @@ function ArrayView({
   const baselineStats = entry.stats;
   const chartH = Math.round(chartWidth * 0.45);
 
+  // Shared x-range across CURRENT and REGISTRY BASELINE histograms — taken
+  // as the union of both edge ranges so neither chart gets visually
+  // squashed against the other. Without this each chart auto-fits its own
+  // edges and bars at the same data values land at different x positions.
+  const sharedXRange = ((): [number, number] | undefined => {
+    const ranges: [number, number][] = [];
+    if (computed?.histogram?.edges?.length) {
+      const e = computed.histogram.edges;
+      ranges.push([e[0], e[e.length - 1]]);
+    }
+    if (baselineHist?.edges?.length) {
+      const e = baselineHist.edges;
+      ranges.push([e[0], e[e.length - 1]]);
+    }
+    if (ranges.length < 2) return undefined; // only one chart will render
+    const lo = Math.min(...ranges.map((r) => r[0]));
+    const hi = Math.max(...ranges.map((r) => r[1]));
+    return [lo, hi];
+  })();
+
   const provenance = computed
     ? `recomputed in this browser · ${computed.stats?.n.toLocaleString()} samples · ${computed.durationMs.toFixed(1)} ms`
     : diskLoaded
@@ -328,12 +348,14 @@ function ArrayView({
             CURRENT <span style={{ fontWeight: 400, color: "#666" }}>· this browser run</span>
           </div>
           <Histogram
+            key={`current-${entry.id}`}
             bins={computed.histogram.bins}
             edges={computed.histogram.edges}
             width={chartWidth}
             height={chartH}
             label={label}
             barColor="rgba(24,80,200,0.55)"
+            xRange={sharedXRange}
           />
         </div>
       )}
@@ -352,12 +374,14 @@ function ArrayView({
             <span style={{ fontWeight: 400 }}> · N=200k vs registry</span>
           </div>
           <Histogram
+            key={`baseline-${entry.id}`}
             bins={baselineHist.bins}
             edges={baselineHist.edges}
             width={chartWidth}
             height={chartH}
             label={`${label} (baseline)`}
             barColor="rgba(160,160,160,0.55)"
+            xRange={sharedXRange}
           />
         </div>
       )}

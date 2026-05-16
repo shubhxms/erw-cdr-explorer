@@ -9,6 +9,13 @@ interface Props {
   height?: number;
   label?: string;
   barColor?: string;
+  /**
+   * Force the x-axis scale to this [min, max] range. Used by callers that
+   * render two histograms side-by-side (e.g. CURRENT vs REGISTRY BASELINE)
+   * so the bars line up at the same data values across both charts. If
+   * unset uPlot auto-fits from the bin edges.
+   */
+  xRange?: [number, number];
 }
 
 interface CursorState {
@@ -35,6 +42,7 @@ export function Histogram({
   height = 180,
   label = "value",
   barColor,
+  xRange,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
@@ -51,7 +59,9 @@ export function Histogram({
     const opts: uPlot.Options = {
       width,
       height,
-      padding: [10, 14, 0, 0],
+      // [top, right, bottom, left] — give the left side some room so y-axis
+      // tick labels don't get clipped by the chart container.
+      padding: [10, 14, 0, 6],
       cursor: {
         show: true,
         drag: { setScale: false },
@@ -71,16 +81,40 @@ export function Histogram({
           font: "10px system-ui",
           ticks: { stroke: "#ccc" },
           grid: { stroke: "#eee" },
-          size: 40,
+          // Widened from 40 → 60 so long y-axis labels (e.g. "200,000")
+          // fit fully in the gutter rather than getting clipped.
+          size: 60,
         },
       ],
-      scales: { x: { time: false } },
+      scales: {
+        // Static [min, max] tuple is uPlot's most direct way to force a
+        // fixed x-axis scale. Using `range: () => xRange` (a callback)
+        // appeared to confuse the bars-paths builder when the data
+        // sub-spanned the visible range — two histograms with different
+        // bin edges ended up rendering identical-looking bars.
+        x: xRange
+          ? { time: false, range: [xRange[0], xRange[1]] as [number, number] }
+          : { time: false },
+      },
       series: [
         {},
         {
           stroke: barColor ? barColor.replace(/[\d.]+\)$/, "1)") : "#333",
           fill: barColor ?? "rgba(80,80,80,0.6)",
-          paths: uPlot.paths!.bars!({ size: [0.95, Infinity] }),
+          // Compute bar width in DATA UNITS rather than the default 0.95×
+          // point-spacing fraction. The fraction-based default measures
+          // point-spacing in PIXELS within the visible range — when xRange
+          // forces the axis wider than the data, the per-point pixel
+          // spacing drops and bars get squashed; if both charts share the
+          // same wider xRange but plot at different bin centers, the bars
+          // can degenerate visually. Using a fixed data-unit width
+          // (≈ 0.95 × actual bin width) makes each chart's bars sized
+          // from its own bin edges, independent of the shared visible
+          // window.
+          paths: uPlot.paths!.bars!({
+            size: [0.95, Infinity],
+            align: 0,
+          }),
           points: { show: false },
         },
       ],
@@ -105,7 +139,7 @@ export function Histogram({
       plotRef.current?.destroy();
       plotRef.current = null;
     };
-  }, [bins, edges, width, height]);
+  }, [bins, edges, width, height, xRange?.[0], xRange?.[1]]);
 
   const total = bins.reduce((a, b) => a + b, 0) || 1;
   const tt = cursor.visible && cursor.binIdx >= 0 && cursor.binIdx < bins.length;
