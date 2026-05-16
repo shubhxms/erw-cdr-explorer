@@ -1,26 +1,48 @@
 /**
- * Column-per-stage layout using dagre.
- * Stages flow left → right; nodes within a stage stack top → bottom by execution step.
+ * Manual column-per-stage layout.
+ *
+ * Replaces dagre's automatic node positioning with a deterministic columnar
+ * arrangement: nodes within a stage are sorted by execution step (with file
+ * order as the stable tiebreaker, which keeps the Ti / Ca / Mg sub-pipelines
+ * contiguous in chain_deployment + chain_treatment instead of interleaved).
+ *
+ * Sub-stages that share a column are stacked top-to-bottom into bands:
+ *   col 3: chain_deployment on top, chain_treatment below
+ *   col 4: aggregation on top, diagnostics below
+ *
+ * Edges keep the handle-slot routing built further down — only the node
+ * positions are computed here.
  */
 
-import dagre from "dagre";
 import type { Edge, Node } from "@xyflow/react";
-import { NODES, type Stage } from "../dag/nodes";
+import { NODES, type Stage, type DagNode } from "../dag/nodes";
 import { EDGES } from "../dag/edges";
 import { HANDLE_COUNT, type CheckpointNodeData } from "./CheckpointNode";
 
 const NODE_W = 220;
 const NODE_H = 84;
+const COL_GAP = 380; // horizontal distance between columns (center-to-center)
+const ROW_GAP = 96; // vertical pitch within a column band (top-edge to top-edge)
+const BAND_GAP = 80; // extra vertical padding between bands sharing a column
 
-const STAGE_RANK: Record<Stage, number> = {
+const COL_X: Record<Stage, number> = {
   inputs: 0,
-  cleaning: 1,
-  bootstrap: 2,
-  chain_deployment: 3,
-  chain_treatment: 3, // same column, separated vertically by dagre
-  diagnostics: 4,
-  aggregation: 4,
+  cleaning: 1 * COL_GAP,
+  bootstrap: 2 * COL_GAP,
+  chain_deployment: 3 * COL_GAP,
+  chain_treatment: 3 * COL_GAP,
+  aggregation: 4 * COL_GAP,
+  diagnostics: 4 * COL_GAP,
 };
+
+/**
+ * Bands within a column. Stages listed top-to-bottom in their visual order.
+ * Stages not listed here get their own dedicated column band at y = 0.
+ */
+const COLUMN_BANDS: Stage[][] = [
+  ["chain_deployment", "chain_treatment"],
+  ["aggregation", "diagnostics"],
+];
 
 export interface LayoutResult {
   nodes: Node<CheckpointNodeData>[];
@@ -28,36 +50,63 @@ export interface LayoutResult {
 }
 
 export function computeLayout(): LayoutResult {
-  const g = new dagre.graphlib.Graph({ multigraph: false });
-  g.setGraph({
-    rankdir: "LR",
-    // Wider horizontal gaps + larger edgesep give dagre room to route many
-    // parallel edges with visible offset between them instead of stacking
-    // them on top of each other through narrow corridors.
-    nodesep: 48,
-    ranksep: 180,
-    edgesep: 32,
-    marginx: 40,
-    marginy: 40,
-  });
-  g.setDefaultEdgeLabel(() => ({}));
-
+  // Bucket nodes by stage, preserving file order from nodes.ts. We deliberately
+  // do NOT sort by `step` here — file order is a hand-curated grouping that
+  // keeps Ca and Mg pipelines visually contiguous in chain_deployment +
+  // chain_treatment, instead of interleaving them per step.
+  const byStage: Map<Stage, DagNode[]> = new Map();
   for (const n of NODES) {
-    g.setNode(n.id, { width: NODE_W, height: NODE_H, rank: STAGE_RANK[n.stage] });
-  }
-  for (const e of EDGES) {
-    if (!g.hasNode(e.from) || !g.hasNode(e.to)) continue;
-    g.setEdge(e.from, e.to, { minlen: 1 });
+    const arr = byStage.get(n.stage) ?? [];
+    arr.push(n);
+    byStage.set(n.stage, arr);
   }
 
-  dagre.layout(g);
+  // Assign y positions per stage. Stages sharing a column get stacked.
+  const positions = new Map<string, { x: number; y: number }>();
+  const stagesInBand = new Set<Stage>();
+  for (const band of COLUMN_BANDS) {
+    let y = 0;
+    for (const stage of band) {
+      stagesInBand.add(stage);
+      const nodes = byStage.get(stage) ?? [];
+      for (const n of nodes) {
+        positions.set(n.id, { x: COL_X[stage], y });
+        y += ROW_GAP;
+      }
+      y += BAND_GAP; // padding between stacked sub-stages
+    }
+  }
+  // Stages not in any band: laid out as a single band starting at y = 0.
+  for (const [stage, nodes] of byStage) {
+    if (stagesInBand.has(stage)) continue;
+    let y = 0;
+    for (const n of nodes) {
+      positions.set(n.id, { x: COL_X[stage], y });
+      y += ROW_GAP;
+    }
+  }
+
+  // Centre all columns vertically against the tallest one — keeps short
+  // columns (inputs, cleaning) from floating at the top while long ones
+  // (bootstrap, chain) extend far below.
+  const colHeights = new Map<number, number>();
+  for (const [, pos] of positions) {
+    const cur = colHeights.get(pos.x) ?? 0;
+    if (pos.y > cur) colHeights.set(pos.x, pos.y);
+  }
+  const maxColHeight = Math.max(...colHeights.values(), 0);
+  for (const [id, pos] of positions) {
+    const colH = colHeights.get(pos.x) ?? 0;
+    const offset = (maxColHeight - colH) / 2;
+    positions.set(id, { x: pos.x, y: pos.y + offset });
+  }
 
   const nodes: Node<CheckpointNodeData>[] = NODES.map((n) => {
-    const pos = g.node(n.id);
+    const pos = positions.get(n.id) ?? { x: 0, y: 0 };
     return {
       id: n.id,
       type: "checkpoint",
-      position: { x: pos.x - NODE_W / 2, y: pos.y - NODE_H / 2 },
+      position: { x: pos.x, y: pos.y },
       data: { id: n.id, label: n.label, stage: n.stage, description: n.description, unit: n.unit },
       width: NODE_W,
       height: NODE_H,
@@ -65,6 +114,13 @@ export function computeLayout(): LayoutResult {
       draggable: false,
     };
   });
+
+  // Helper used by edge routing below. We need each node's center-y for
+  // sorting outgoing/incoming edges by neighbour position.
+  function centerY(id: string): number {
+    const p = positions.get(id);
+    return p ? p.y + NODE_H / 2 : 0;
+  }
 
   // ---- Handle-slot assignment ------------------------------------------
   // Each node has HANDLE_COUNT invisible handles per side. Each edge is
@@ -99,11 +155,11 @@ export function computeLayout(): LayoutResult {
     origIdx: number;
   };
   const positioned: PositionedEdge[] = EDGES.filter(
-    (e) => g.hasNode(e.from) && g.hasNode(e.to),
+    (e) => positions.has(e.from) && positions.has(e.to),
   ).map((e, i) => ({
     ...e,
-    fromY: g.node(e.from).y,
-    toY: g.node(e.to).y,
+    fromY: centerY(e.from),
+    toY: centerY(e.to),
     origIdx: i,
   }));
 
