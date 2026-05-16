@@ -70,10 +70,18 @@ export function TornadoChart({
       height={height}
       style={{ fontFamily: "system-ui, sans-serif", display: "block" }}
     >
-      {/* axis label */}
+      {/* axis label + color key. Color is keyed to the SIGN of the p16
+       *  delta, not the direction of the input perturbation — Ti is the
+       *  giveaway case where +10% input → negative p16 delta → orange. */}
       <text x={centerX} y={14} fontSize={10} fill="#666" textAnchor="middle">
         Δ p16 (tCO₂e) — baseline {baselineP16.toFixed(2)}
       </text>
+      <g transform={`translate(${labelW + barAreaW + 8}, 8)`}>
+        <rect x={0} y={0} width={10} height={8} fill={CURRENT_COLOR} opacity={0.85} rx={1.5} />
+        <text x={14} y={7} fontSize={9} fill="#444">p16 ↑</text>
+        <rect x={0} y={11} width={10} height={8} fill={NEG_COLOR} opacity={0.85} rx={1.5} />
+        <text x={14} y={18} fontSize={9} fill="#444">p16 ↓</text>
+      </g>
 
       {/* gridlines + tick labels */}
       {ticks.map((t, i) => {
@@ -156,12 +164,16 @@ export function TornadoChart({
               opacity={0.85}
               rx={1.5}
             />
-            {/* numeric labels at far ends */}
+            {/* Numeric labels at far ends. Colors match the bar fills —
+             *  sign of the delta, not direction of the perturbation. For Ti
+             *  this means +10% input shows in the negative color because
+             *  scaling the tracer up DECREASES p16 (Ti sits in the
+             *  mass_ratio denominator). */}
             <text
               x={labelW + barAreaW + 8}
               y={y + rowHeight / 2 - 1}
               fontSize={10}
-              fill={CURRENT_COLOR}
+              fill={row.deltaPlus >= 0 ? CURRENT_COLOR : NEG_COLOR}
               textAnchor="start"
               style={{ fontVariantNumeric: "tabular-nums" }}
             >
@@ -171,7 +183,7 @@ export function TornadoChart({
               x={labelW + barAreaW + 8}
               y={y + rowHeight / 2 + 12}
               fontSize={10}
-              fill={NEG_COLOR}
+              fill={row.deltaMinus >= 0 ? CURRENT_COLOR : NEG_COLOR}
               textAnchor="start"
               style={{ fontVariantNumeric: "tabular-nums" }}
             >

@@ -281,7 +281,10 @@ function P16Readout() {
 
   if (error) return <span style={{ color: "#a4570e", fontSize: 12 }}>data not wired</span>;
   if (!manifest) return <span style={{ color: "#888" }}>loading…</span>;
-  const reg = manifest.registry_p16;
+  // Registry value lives in removals.ts (per-removal), not in the manifest —
+  // the manifest's `registry_p16` field is vestigial and currently always
+  // carries the first removal's default.
+  const reg = REMOVAL_BY_ID[removalId]?.registryP16 ?? null;
   // Prefer the freshly-computed p16 if a run has finished; otherwise show
   // the precomputed registry-matching value from the manifest.
   const showRecomputed = computedP16 !== null;
@@ -298,14 +301,19 @@ function P16Readout() {
     : showPrecomputed
       ? manifest.computed_p16!
       : null;
-  const delta = compared !== null ? (compared - reg) : null;
-  const tolPct = compared !== null && reg !== 0 ? Math.abs(delta! / reg) * 100 : null;
+  const delta = compared !== null && reg !== null ? (compared - reg) : null;
+  const tolPct =
+    compared !== null && reg !== null && reg !== 0
+      ? Math.abs(delta! / reg) * 100
+      : null;
   return (
     <span style={{ fontVariantNumeric: "tabular-nums" }}>
       p16 = <strong>{display}</strong>
       <span style={{ color: "#666", marginLeft: 2 }}>tCO₂e</span>
-      <span style={{ color: "#888" }}> / registry {reg.toFixed(3)} tCO₂e</span>
-      {compared !== null && (
+      {reg !== null && (
+        <span style={{ color: "#888" }}> / registry {reg.toFixed(3)} tCO₂e</span>
+      )}
+      {compared !== null && delta !== null && (
         <span style={{ marginLeft: 6, color: "#666" }}>
           Δ {delta! >= 0 ? "+" : ""}
           {delta!.toFixed(3)} ({tolPct!.toFixed(3)}%)

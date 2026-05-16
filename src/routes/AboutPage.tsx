@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
 import { useManifest } from "../data/manifest";
 import { useStore } from "../store";
+import { REMOVAL_BY_ID } from "../data/removals";
 
 export function AboutPage() {
   const removalId = useStore((s) => s.removalId);
   const { manifest: m } = useManifest(removalId);
+  const reg = REMOVAL_BY_ID[removalId]?.registryP16 ?? null;
   return (
     <div
       style={{
@@ -73,12 +75,19 @@ export function AboutPage() {
 
       <h2 style={{ fontSize: 16 }}>Reported result</h2>
       <p>
-        The registry reports <strong>p16 = 4,703.709 tCO₂e</strong>.
-        {m && m.computed_p16 !== null && (
+        {reg !== null ? (
+          <>
+            The registry reports <strong>p16 = {reg.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} tCO₂e</strong>
+            {" "}for <code>{removalId}</code>.
+          </>
+        ) : (
+          <>Registry value for <code>{removalId}</code> not configured.</>
+        )}
+        {m && m.computed_p16 !== null && reg !== null && (
           <>
             {" "}This explorer independently computed{" "}
             <strong>{m.computed_p16.toFixed(3)} tCO₂e</strong>{" "}
-            (Δ = {Math.abs(m.computed_p16 - m.registry_p16).toFixed(3)}),
+            (Δ = {Math.abs(m.computed_p16 - reg).toFixed(3)}),
             verifying the chain end-to-end in the browser.
           </>
         )}

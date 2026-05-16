@@ -14,6 +14,13 @@ export interface Removal {
   credits: number;
   /** Set to false while we haven't sourced the checkpoint data yet. */
   available: boolean;
+  /**
+   * Registry-published gross "CDR from weathering" p16 in tCO₂e — the value
+   * our chain should reproduce when we run with the corresponding inputs.
+   * This is the same number that appears in the registry data-points table
+   * as "CDR from weathering". Null = not yet known / data not staged.
+   */
+  registryP16: number | null;
 }
 
 export interface Issuance {
@@ -37,8 +44,18 @@ export const ISSUANCES: Issuance[] = [
     bufferPool: 131.6,
     supplierAllocation: 6448.34,
     removals: [
-      { id: "rmv_1KH3W7FMH1S0J5R9", credits: 2777.986, available: true },
-      { id: "rmv_1KP3N5DC81S0TCV7", credits: 3670.354, available: false },
+      {
+        id: "rmv_1KH3W7FMH1S0J5R9",
+        credits: 2777.986,
+        available: true,
+        registryP16: 4703.709,
+      },
+      {
+        id: "rmv_1KP3N5DC81S0TCV7",
+        credits: 3670.354,
+        available: true,
+        registryP16: 5568.389,
+      },
     ],
   },
   {
@@ -48,7 +65,15 @@ export const ISSUANCES: Issuance[] = [
     bufferPool: 55.308,
     supplierAllocation: 2710.062,
     removals: [
-      { id: "rmv_1KJY9XXRH1S0WQWQ", credits: 2765.37, available: false },
+      // Data uses library v0.17.1 (older schema: soil_samples.csv, no separate
+      // feedstock/bulk_density files). Not currently runnable through the
+      // v0.21.4 chain in this app — flagged as unavailable.
+      {
+        id: "rmv_1KJY9XXRH1S0WQWQ",
+        credits: 2765.37,
+        available: false,
+        registryP16: null,
+      },
     ],
   },
   {
@@ -58,7 +83,13 @@ export const ISSUANCES: Issuance[] = [
     bufferPool: 4.427,
     supplierAllocation: 216.923,
     removals: [
-      { id: "rmv_pending_2025_11", credits: 221.35, available: false },
+      // Source data not yet sourced — only the registry page text is on disk.
+      {
+        id: "rmv_1K88TT4NG1S0ZE4S",
+        credits: 221.35,
+        available: false,
+        registryP16: null,
+      },
     ],
   },
 ];

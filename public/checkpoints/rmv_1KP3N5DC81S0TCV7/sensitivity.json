@@ -1,0 +1,30 @@
+{
+  "computed_at": "2026-05-16T12:03:56.399989+00:00",
+  "removal_id": "rmv_1KP3N5DC81S0TCV7",
+  "n_runs": 200000,
+  "seed": 42,
+  "scale": 0.1,
+  "baseline_p16": 5568.388949452631,
+  "results": [
+    {
+      "id": "application_rate_kg_ha",
+      "plus_p16": 6125.227844397893,
+      "minus_p16": 5011.550054507367
+    },
+    {
+      "id": "feedstock_ca",
+      "plus_p16": 6222.794306305459,
+      "minus_p16": 4913.845744246567
+    },
+    {
+      "id": "feedstock_mg",
+      "plus_p16": 6164.667696078146,
+      "minus_p16": 4972.028520294338
+    },
+    {
+      "id": "feedstock_ti",
+      "plus_p16": 4850.836868403871,
+      "minus_p16": 6285.460938936158
+    }
+  ]
+}
