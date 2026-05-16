@@ -74,6 +74,9 @@ export function ExplorerPage() {
           <ConstantsButton />
           <RunControls />
           <P16Readout />
+          <Link to={`/sensitivity?removal=${removalId}`} style={{ color: "#666" }}>
+            sensitivity
+          </Link>
           <Link to="/about" style={{ color: "#666" }}>
             about
           </Link>

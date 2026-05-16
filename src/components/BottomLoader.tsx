@@ -15,16 +15,27 @@ export function BottomLoader() {
   const runPhase = useStore((s) => s.runPhase);
   const computedCount = useStore((s) => s.computedSet.size);
   const currentlyComputing = useStore((s) => s.currentlyComputing);
+  const sweep = useStore((s) => s.sweep);
 
-  const visible = runStatus === "loading" || runStatus === "running";
+  const sweepRunning = sweep.status === "running";
+  const visible = sweepRunning || runStatus === "loading" || runStatus === "running";
   if (!visible) return null;
 
-  // Indeterminate during cold-start; determinate (progress %) once the chain
-  // is actually running and posting per-node messages.
-  const isRunning = runStatus === "running" && runPhase === "running";
-  const pct = isRunning ? Math.min(100, (computedCount / TOTAL_NODES) * 100) : 0;
+  // Sweep progress takes priority — during a sweep we suppress the canvas
+  // runStatus updates (in store.ts) so this is the only feedback the user
+  // gets that the chain is actually doing 9 sequential runs.
+  const isRunning =
+    sweepRunning || (runStatus === "running" && runPhase === "running");
+  const pct = sweepRunning
+    ? Math.min(100, (sweep.currentStep / sweep.totalSteps) * 100)
+    : isRunning
+      ? Math.min(100, (computedCount / TOTAL_NODES) * 100)
+      : 0;
 
   const phaseLabel = (() => {
+    if (sweepRunning) {
+      return `sweep ${sweep.currentStep + 1}/${sweep.totalSteps} — ${sweep.currentLabel}`;
+    }
     if (runPhase === "loading-pyodide") return "loading Pyodide runtime";
     if (runPhase === "loading-packages") return "loading numpy / pandas / scipy / pyarrow";
     if (runPhase === "installing-library") return "installing isometric_calculation_library";
