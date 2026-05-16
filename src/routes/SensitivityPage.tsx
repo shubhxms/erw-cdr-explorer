@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useStore } from "../store";
 import {
   loadPrecomputedSensitivity,
@@ -15,6 +15,7 @@ import {
 import { REMOVAL_BY_ID, DEFAULT_REMOVAL_ID } from "../data/removals";
 import { TornadoChart } from "../components/TornadoChart";
 import { downloadCsv } from "../data/csvExport";
+import { PageLayout } from "../components/PageLayout";
 
 export function SensitivityPage() {
   const [params] = useSearchParams();
@@ -108,30 +109,20 @@ export function SensitivityPage() {
   const removalLabel = REMOVAL_BY_ID[removalId]?.id ?? removalId;
 
   return (
-    <div
-      style={{
-        fontFamily: "system-ui, sans-serif",
-        maxWidth: 980,
-        margin: "32px auto",
-        padding: "0 24px",
-        color: "#222",
-      }}
+    <PageLayout
+      title="Sensitivity (tornado)"
+      maxWidth={980}
+      subtitle={
+        <>
+          One-at-a-time perturbation: each of 4 inputs is scaled to{" "}
+          <code>baseline × (1 ± {(scale * 100).toFixed(0)}%)</code>, the chain
+          re-runs, and the resulting <code>p16</code> delta is recorded. Bars
+          are sorted by |Δ<sub>+</sub>| + |Δ<sub>−</sub>|.{" "}
+          <strong>Caveat:</strong> OAT does not capture interaction effects;
+          Sobol variance decomposition is the natural next step.
+        </>
+      }
     >
-      <div style={{ marginBottom: 12 }}>
-        <Link to={`/?removal=${removalId}`} style={{ color: "#666", fontSize: 12 }}>
-          ← back to canvas
-        </Link>
-      </div>
-      <h1 style={{ marginBottom: 4, fontSize: 22 }}>Sensitivity (tornado)</h1>
-      <p style={{ color: "#666", marginTop: 0, fontSize: 13, lineHeight: 1.55 }}>
-        One-at-a-time perturbation: each of 4 inputs is scaled to{" "}
-        <code>baseline × (1 ± {(scale * 100).toFixed(0)}%)</code>, the chain re-runs,
-        and the resulting <code>p16</code> delta is recorded. Bars are sorted by{" "}
-        |Δ<sub>+</sub>| + |Δ<sub>−</sub>|. <strong>Caveat:</strong> OAT does not
-        capture interaction effects; Sobol variance decomposition is the
-        natural next step.
-      </p>
-
       <div
         style={{
           marginTop: 16,
@@ -310,6 +301,6 @@ export function SensitivityPage() {
           robust to that assumption.
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 }

@@ -1,28 +1,14 @@
-import { Link } from "react-router-dom";
 import { useManifest } from "../data/manifest";
 import { useStore } from "../store";
 import { REMOVAL_BY_ID } from "../data/removals";
+import { PageLayout } from "../components/PageLayout";
 
 export function AboutPage() {
   const removalId = useStore((s) => s.removalId);
   const { manifest: m } = useManifest(removalId);
   const reg = REMOVAL_BY_ID[removalId]?.registryP16 ?? null;
   return (
-    <div
-      style={{
-        fontFamily: "system-ui, sans-serif",
-        maxWidth: 680,
-        margin: "40px auto",
-        padding: "0 24px",
-        lineHeight: 1.6,
-        color: "#222",
-      }}
-    >
-      <h1 style={{ marginBottom: 4, fontSize: 22 }}>EW CDR Checkpoint Explorer</h1>
-      <p style={{ color: "#666", marginTop: 0, marginBottom: 24 }}>
-        <Link to="/">back to canvas</Link>
-      </p>
-
+    <PageLayout title="EW CDR Checkpoint Explorer">
       <h2 style={{ fontSize: 16, marginTop: 0 }}>What is this?</h2>
       <p>
         An interactive visualization of the enhanced-weathering CDR calculation
@@ -67,9 +53,9 @@ export function AboutPage() {
       <ol style={{ paddingLeft: 20 }}>
         <li><strong>Inputs</strong> — Raw soil samples, feedstock composition (Ca, Mg, Ti), bulk density, and plot areas are loaded.</li>
         <li><strong>Cleaning</strong> — Zero-filtering and winsorisation remove outliers per sampling event and plot type.</li>
-        <li><strong>Bootstrap</strong> — Bulk density, feedstock cation means, and control-correction ratios are bootstrapped (default N=10,000 iterations, seed 42).</li>
+        <li><strong>Bootstrap</strong> — Bulk density, feedstock cation means, and control-correction ratios are bootstrapped (default N=200,000 iterations, seed 42).</li>
         <li><strong>Per-plot chain</strong> — For each plot (deployment, treatment): pairing, mass ratio via immobile Ti tracer, post-application concentration, fraction dissolved, CDR per cation, and CO₂ conversion.</li>
-        <li><strong>Diagnostics</strong> — Tracer resolvability, application rate check, weathering significance, and representativeness tests.</li>
+        <li><strong>Validation</strong> — Tracer resolvability, application rate check, weathering significance, and representativeness tests.</li>
         <li><strong>Aggregation</strong> — Deployment and treatment CO₂ are scaled by area and summed. The 16th percentile of the total gives the conservative CDR estimate (p16).</li>
       </ol>
 
@@ -124,6 +110,6 @@ export function AboutPage() {
           {m.total_duration_s?.toFixed(1)}s.
         </p>
       )}
-    </div>
+    </PageLayout>
   );
 }
