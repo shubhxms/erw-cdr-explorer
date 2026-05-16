@@ -72,6 +72,7 @@ export function ConstantsButton() {
           {CONSTANTS.map((c) => (
             <ConstantRow key={c.id} meta={c} />
           ))}
+          <SeedRow />
         </div>
       )}
     </div>
@@ -159,6 +160,84 @@ function ConstantRow({ meta }: { meta: ConstantMeta }) {
           type="button"
           onClick={() => clearEdit(meta.id)}
           title="revert to default"
+          style={{
+            fontSize: 10,
+            color: "#a00",
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            padding: "2px 4px",
+          }}
+        >
+          ✕
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * PRNG seed row. Seed isn't an EditSpec — it's a runtime RNG parameter, not
+ * a value transform — so it talks to `s.seed` / `s.setSeed` directly. The
+ * EditsPanel surfaces it as a tracked change when it differs from 42 (the
+ * seed under which the registry-baseline manifest was generated).
+ */
+const DEFAULT_SEED = 42;
+
+function SeedRow() {
+  const seed = useStore((s) => s.seed);
+  const setSeed = useStore((s) => s.setSeed);
+  const edited = seed !== DEFAULT_SEED;
+  return (
+    <div
+      style={{
+        padding: "6px 0",
+        borderBottom: "1px solid #f0f0f0",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 8,
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: edited ? 600 : 400 }}>
+          PRNG seed
+          {edited && <span style={{ marginLeft: 4, color: "#1850c8" }}>✎</span>}
+        </div>
+        <div
+          style={{
+            fontSize: 10,
+            color: "#888",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          numpy.default_rng(seed) — controls all bootstrap resampling
+        </div>
+      </div>
+      <input
+        type="number"
+        value={seed}
+        step={1}
+        onChange={(e) => {
+          const v = parseInt(e.target.value, 10);
+          if (Number.isFinite(v)) setSeed(v);
+        }}
+        style={{
+          width: 90,
+          fontSize: 12,
+          padding: "2px 4px",
+          border: "1px solid #ccc",
+          borderRadius: 3,
+          fontVariantNumeric: "tabular-nums",
+        }}
+      />
+      {edited && (
+        <button
+          type="button"
+          onClick={() => setSeed(DEFAULT_SEED)}
+          title="revert to 42"
           style={{
             fontSize: 10,
             color: "#a00",
