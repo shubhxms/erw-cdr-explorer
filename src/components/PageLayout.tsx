@@ -22,7 +22,7 @@ export function PageLayout({ title, subtitle, maxWidth = 720, children }: Props)
   return (
     <div
       style={{
-        fontFamily: "system-ui, sans-serif",
+        fontFamily: '"Cartograph CF", system-ui, sans-serif',
         maxWidth,
         margin: "40px auto",
         padding: "0 24px",
@@ -55,7 +55,7 @@ export function PageLayout({ title, subtitle, maxWidth = 720, children }: Props)
       </p>
       <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>{title}</h1>
       {subtitle && (
-        <p style={{ color: "#666", marginTop: 0, marginBottom: 24, fontSize: 13 }}>
+        <p style={{ color: "#666", marginTop: 0, marginBottom: 24, fontSize: 13, fontStyle: "italic" }}>
           {subtitle}
         </p>
       )}

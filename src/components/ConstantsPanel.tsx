@@ -62,7 +62,7 @@ export function ConstantsButton() {
             boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
             padding: 12,
             zIndex: 50,
-            fontFamily: "system-ui, sans-serif",
+            fontFamily: '"Cartograph CF", system-ui, sans-serif',
             fontSize: 12,
           }}
         >

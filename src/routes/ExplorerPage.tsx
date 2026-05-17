@@ -61,21 +61,32 @@ export function ExplorerPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          fontFamily: "system-ui, sans-serif",
+          fontFamily: '"Cartograph CF", system-ui, sans-serif',
           fontSize: 13,
           background: "#fff",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <strong style={{ fontSize: 14 }}>ERW CDR Explorer</strong>
+          <strong style={{ fontSize: 14, fontStyle: "italic" }}>ERW CDR Explorer</strong>
           <RemovalSwitcher />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <ConstantsButton />
           <RunControls />
           <P16Readout />
-          <Link to={`/sensitivity?removal=${removalId}`} style={{ color: "#666" }}>
-            sensitivity
+          <Link
+            to={`/sensitivity?removal=${removalId}`}
+            style={{
+              padding: "3px 10px",
+              background: "#eaf0fb",
+              color: "#1850c8",
+              border: "1px solid #c4d3ee",
+              borderRadius: 3,
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
+          >
+            sensitivity →
           </Link>
           <Link to="/about" style={{ color: "#666" }}>
             about
@@ -112,8 +123,9 @@ function ManifestBanner() {
         background: "#fff5e6",
         borderBottom: "1px solid #f0d8a0",
         color: "#7a4a0e",
-        fontFamily: "system-ui, sans-serif",
+        fontFamily: '"Cartograph CF", system-ui, sans-serif',
         fontSize: 12,
+        fontStyle: "italic",
       }}
     >
       <strong>{removalId}</strong> — checkpoint data not yet wired up. Switch to an

@@ -71,14 +71,14 @@ export function Histogram({
       axes: [
         {
           stroke: "#666",
-          font: "10px system-ui",
+          font: '10px "Cartograph CF", system-ui',
           ticks: { stroke: "#ccc" },
           grid: { stroke: "#eee" },
           size: 32,
         },
         {
           stroke: "#666",
-          font: "10px system-ui",
+          font: '10px "Cartograph CF", system-ui',
           ticks: { stroke: "#ccc" },
           grid: { stroke: "#eee" },
           // Widened from 40 → 60 so long y-axis labels (e.g. "200,000")
@@ -173,7 +173,7 @@ export function Histogram({
             borderRadius: 3,
             padding: "4px 6px",
             fontSize: 10,
-            fontFamily: "system-ui, sans-serif",
+            fontFamily: '"Cartograph CF", system-ui, sans-serif',
             color: "#222",
             boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
             fontVariantNumeric: "tabular-nums",

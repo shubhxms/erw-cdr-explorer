@@ -68,7 +68,7 @@ export function TornadoChart({
     <svg
       width={width}
       height={height}
-      style={{ fontFamily: "system-ui, sans-serif", display: "block" }}
+      style={{ fontFamily: '"Cartograph CF", system-ui, sans-serif', display: "block" }}
     >
       {/* axis label + color key. Color encodes the direction of the input
        *  perturbation (+10% vs −10%), not the sign of the resulting p16

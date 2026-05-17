@@ -29,7 +29,7 @@ export function SeedChangeModal({ open, prevSeed, newSeed, onConfirm, onCancel }
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontFamily: "system-ui, sans-serif",
+        fontFamily: '"Cartograph CF", system-ui, sans-serif',
       }}
       onClick={onCancel}
     >

@@ -1,3 +1,56 @@
+@font-face {
+    font-family: "Cartograph CF";
+    src: url("/fonts/CartographCF-Regular.woff2") format("woff2"),
+         url("/fonts/CartographCF-Regular.woff") format("woff");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Cartograph CF";
+    src: url("/fonts/CartographCF-RegularItalic.woff2") format("woff2"),
+         url("/fonts/CartographCF-RegularItalic.woff") format("woff");
+    font-weight: 400;
+    font-style: italic;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Cartograph CF";
+    src: url("/fonts/CartographCF-DemiBold.woff2") format("woff2"),
+         url("/fonts/CartographCF-DemiBold.woff") format("woff");
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Cartograph CF";
+    src: url("/fonts/CartographCF-DemiBoldItalic.woff2") format("woff2"),
+         url("/fonts/CartographCF-DemiBoldItalic.woff") format("woff");
+    font-weight: 600;
+    font-style: italic;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Cartograph CF";
+    src: url("/fonts/CartographCF-Bold.woff2") format("woff2"),
+         url("/fonts/CartographCF-Bold.woff") format("woff");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Cartograph CF";
+    src: url("/fonts/CartographCF-BoldItalic.woff2") format("woff2"),
+         url("/fonts/CartographCF-BoldItalic.woff") format("woff");
+    font-weight: 700;
+    font-style: italic;
+    font-display: swap;
+}
+
+:root {
+    --font-sans: "Cartograph CF", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
 html,
 body,
 #root {
@@ -6,6 +59,7 @@ body,
     height: 100%;
     background: #f6f6f6;
     color: #222;
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
 }
 
@@ -27,9 +81,18 @@ code {
     font-size: 0.9em;
 }
 
+h1, h2, h3, h4 {
+    font-style: italic;
+    font-weight: 600;
+}
+
+blockquote, em, i, cite {
+    font-style: italic;
+}
+
 /* react-flow tweaks */
 .react-flow__node {
-    font-family: system-ui, sans-serif;
+    font-family: var(--font-sans);
 }
 
 .react-flow__attribution {

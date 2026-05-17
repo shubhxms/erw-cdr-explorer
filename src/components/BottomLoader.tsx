@@ -57,7 +57,7 @@ export function BottomLoader() {
         bottom: 0,
         zIndex: 200,
         pointerEvents: "none",
-        fontFamily: "system-ui, sans-serif",
+        fontFamily: '"Cartograph CF", system-ui, sans-serif',
       }}
     >
       <div

@@ -25,7 +25,7 @@ export function Legend() {
         border: "1px solid #ddd",
         borderRadius: 4,
         padding: "8px 10px",
-        fontFamily: "system-ui, sans-serif",
+        fontFamily: '"Cartograph CF", system-ui, sans-serif',
         fontSize: 11,
         boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
         zIndex: 5,

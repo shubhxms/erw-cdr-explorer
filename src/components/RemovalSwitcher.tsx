@@ -94,7 +94,7 @@ export function RemovalSwitcher() {
             overflowY: "auto",
             zIndex: 100,
             padding: 6,
-            fontFamily: "system-ui, sans-serif",
+            fontFamily: '"Cartograph CF", system-ui, sans-serif',
           }}
         >
           {ISSUANCES.flatMap((iss, idx) => {

@@ -113,7 +113,7 @@ export function EditsPanel() {
         borderLeft: "4px solid #a4570e",
         borderRadius: 6,
         padding: "10px 12px",
-        fontFamily: "system-ui, sans-serif",
+        fontFamily: '"Cartograph CF", system-ui, sans-serif',
         fontSize: 11,
         boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
         zIndex: 6,

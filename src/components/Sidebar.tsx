@@ -50,7 +50,7 @@ export function Sidebar() {
         background: "#fafafa",
         padding: 16,
         overflowY: "auto",
-        fontFamily: "system-ui, sans-serif",
+        fontFamily: '"Cartograph CF", system-ui, sans-serif',
         fontSize: 13,
         boxSizing: "border-box",
       }}
@@ -77,7 +77,7 @@ export function Sidebar() {
 function EmptyState() {
   return (
     <div style={{ color: "#888" }}>
-      <p style={{ marginTop: 0 }}>Select a node to inspect its distribution and stats.</p>
+      <p style={{ marginTop: 0, fontStyle: "italic" }}>Select a node to inspect its distribution and stats.</p>
       <p>
         Each node is a named intermediate in the CDR calculation chain.
         Arrays marked <code>[N]</code> are bootstrap distributions.

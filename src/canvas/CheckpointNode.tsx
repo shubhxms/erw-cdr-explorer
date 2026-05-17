@@ -235,7 +235,7 @@ function CheckpointNodeImpl({ data, selected }: NodeProps) {
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        fontFamily: "system-ui, sans-serif",
+        fontFamily: '"Cartograph CF", system-ui, sans-serif',
         fontSize: 11,
         boxSizing: "border-box",
         cursor: "pointer",

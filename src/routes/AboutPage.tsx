@@ -3,7 +3,7 @@ import { PageLayout } from "../components/PageLayout";
 export function AboutPage() {
   return (
     <PageLayout title="ERW CDR Checkpoint Explorer">
-      <p style={{ marginTop: 0 }}>
+      <p style={{ marginTop: 0, fontStyle: "italic", color: "#444" }}>
         A browser viewer for{" "}
         <a
           href="https://registry.isometric.com/supplier/spl_1J6EQFMYF1S00KDE#issuances"
