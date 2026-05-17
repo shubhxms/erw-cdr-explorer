@@ -16,8 +16,8 @@ interface Props {
   rowHeight?: number;
 }
 
-const CURRENT_COLOR = "#1850c8";
-const NEG_COLOR = "#a4570e";
+const PLUS_COLOR = "#1850c8";
+const MINUS_COLOR = "#a4570e";
 
 function fmt(v: number): string {
   if (!Number.isFinite(v)) return "—";
@@ -70,17 +70,18 @@ export function TornadoChart({
       height={height}
       style={{ fontFamily: "system-ui, sans-serif", display: "block" }}
     >
-      {/* axis label + color key. Color is keyed to the SIGN of the p16
-       *  delta, not the direction of the input perturbation — Ti is the
-       *  giveaway case where +10% input → negative p16 delta → orange. */}
+      {/* axis label + color key. Color encodes the direction of the input
+       *  perturbation (+10% vs −10%), not the sign of the resulting p16
+       *  delta — so all +10% bars share one color regardless of whether
+       *  they raised or lowered p16. */}
       <text x={centerX} y={14} fontSize={10} fill="#666" textAnchor="middle">
         Δ p16 (tCO₂e) — baseline {baselineP16.toFixed(2)}
       </text>
       <g transform={`translate(${labelW + barAreaW + 8}, 8)`}>
-        <rect x={0} y={0} width={10} height={8} fill={CURRENT_COLOR} opacity={0.85} rx={1.5} />
-        <text x={14} y={7} fontSize={9} fill="#444">p16 ↑</text>
-        <rect x={0} y={11} width={10} height={8} fill={NEG_COLOR} opacity={0.85} rx={1.5} />
-        <text x={14} y={18} fontSize={9} fill="#444">p16 ↓</text>
+        <rect x={0} y={0} width={10} height={8} fill={PLUS_COLOR} opacity={0.85} rx={1.5} />
+        <text x={14} y={7} fontSize={9} fill="#444">input +10%</text>
+        <rect x={0} y={11} width={10} height={8} fill={MINUS_COLOR} opacity={0.85} rx={1.5} />
+        <text x={14} y={18} fontSize={9} fill="#444">input −10%</text>
       </g>
 
       {/* gridlines + tick labels */}
@@ -139,7 +140,7 @@ export function TornadoChart({
               y={barY}
               width={plusW}
               height={barH}
-              fill={row.deltaPlus >= 0 ? CURRENT_COLOR : NEG_COLOR}
+              fill={PLUS_COLOR}
               opacity={0.85}
               rx={1.5}
             />
@@ -149,20 +150,15 @@ export function TornadoChart({
               y={barY}
               width={minusW}
               height={barH}
-              fill={row.deltaMinus >= 0 ? CURRENT_COLOR : NEG_COLOR}
+              fill={MINUS_COLOR}
               opacity={0.85}
               rx={1.5}
             />
-            {/* Numeric labels at far ends. Colors match the bar fills —
-             *  sign of the delta, not direction of the perturbation. For Ti
-             *  this means +10% input shows in the negative color because
-             *  scaling the tracer up DECREASES p16 (Ti sits in the
-             *  mass_ratio denominator). */}
             <text
               x={labelW + barAreaW + 8}
               y={y + rowHeight / 2 - 1}
               fontSize={10}
-              fill={row.deltaPlus >= 0 ? CURRENT_COLOR : NEG_COLOR}
+              fill={PLUS_COLOR}
               textAnchor="start"
               style={{ fontVariantNumeric: "tabular-nums" }}
             >
@@ -172,7 +168,7 @@ export function TornadoChart({
               x={labelW + barAreaW + 8}
               y={y + rowHeight / 2 + 12}
               fontSize={10}
-              fill={row.deltaMinus >= 0 ? CURRENT_COLOR : NEG_COLOR}
+              fill={MINUS_COLOR}
               textAnchor="start"
               style={{ fontVariantNumeric: "tabular-nums" }}
             >

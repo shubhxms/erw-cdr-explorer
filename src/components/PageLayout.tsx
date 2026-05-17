@@ -30,10 +30,28 @@ export function PageLayout({ title, subtitle, maxWidth = 720, children }: Props)
         color: "#222",
       }}
     >
-      <p style={{ color: "#666", marginTop: 0, marginBottom: 16, fontSize: 13 }}>
+      <p
+        style={{
+          color: "#666",
+          marginTop: 0,
+          marginBottom: 16,
+          fontSize: 13,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
         <Link to={`/?removal=${removalId}`} style={{ color: "#666" }}>
           ← back to canvas
         </Link>
+        <a
+          href="https://github.com/shubhxms/erw-cdr-explorer"
+          target="_blank"
+          rel="noreferrer"
+          style={{ color: "#666" }}
+        >
+          github
+        </a>
       </p>
       <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>{title}</h1>
       {subtitle && (

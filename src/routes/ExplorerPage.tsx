@@ -80,6 +80,14 @@ export function ExplorerPage() {
           <Link to="/about" style={{ color: "#666" }}>
             about
           </Link>
+          <a
+            href="https://github.com/shubhxms/erw-cdr-explorer"
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: "#666" }}
+          >
+            github
+          </a>
         </div>
       </header>
       <ManifestBanner />

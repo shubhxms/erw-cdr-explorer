@@ -117,11 +117,9 @@ export function SensitivityPage() {
           One-at-a-time perturbation of 4 chain inputs (application rate +
           feedstock Ca/Mg/Ti). Each is scaled to{" "}
           <code>baseline × (1 ± {(scale * 100).toFixed(0)}%)</code>, the
-          chain re-runs end-to-end through Pyodide, and the resulting{" "}
-          <code>p16</code> delta is recorded. Bars sorted by{" "}
-          |Δ<sub>+</sub>| + |Δ<sub>−</sub>|.{" "}
-          <strong>Caveat:</strong> OAT misses interaction effects — Sobol
-          variance decomposition is the natural next step.
+          chain re-runs through Pyodide, and the resulting <code>p16</code>{" "}
+          delta is recorded. Bars sorted by |Δ<sub>+</sub>| + |Δ<sub>−</sub>|.
+          OAT doesn't capture interaction effects.
         </>
       }
     >
@@ -285,36 +283,6 @@ export function SensitivityPage() {
         </div>
       )}
 
-      <div
-        style={{
-          marginTop: 32,
-          paddingTop: 16,
-          borderTop: "1px solid #eee",
-          color: "#555",
-          fontSize: 12,
-          lineHeight: 1.55,
-        }}
-      >
-        <p style={{ marginTop: 0 }}>
-          <strong>How to read it.</strong> Dominant bars = inputs whose
-          uncertainty drives p16. A flat bar near zero = statistically
-          inert. Sign tells you the direction of effect: blue = scaling the
-          input <em>up</em> raised p16; orange = scaling it up{" "}
-          <em>lowered</em> p16.
-        </p>
-        <p style={{ marginBottom: 0 }}>
-          <strong>Audit finding for this removal.</strong> Feedstock{" "}
-          <strong>Ti</strong> (the immobile tracer) dominates with{" "}
-          <strong>inverse sign</strong> — over-reporting Ti concentration
-          drops claimed CDR. Ti sits in the <code>mass_ratio</code>{" "}
-          denominator (<code>(rp_ti − bl_ti) / (fs_ti − rp_ti)</code>), so a
-          larger feedstock-Ti reading shrinks inferred mass ratio →
-          application rate → CDR. <strong>Tracer measurement precision is
-          the load-bearing assumption</strong>, more than the known
-          application rate itself. The cation channels (Ca, Mg) move p16
-          linearly with their concentration.
-        </p>
-      </div>
     </PageLayout>
   );
 }
