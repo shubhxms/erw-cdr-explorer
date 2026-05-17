@@ -161,9 +161,10 @@ function NodeViewWrapper(props: {
         </>
       )}
       <ExportButton nodeId={id} entry={entry} />
-      <InputEditPanel nodeId={id} />
+      <InputEditPanel key={`edit-${id}`} nodeId={id} />
       {entry.kind === "array" && id !== "aggregation/total_co2_tonnes" && (
         <OverridePanel
+          key={`override-${id}`}
           nodeId={id}
           meanHint={
             computedValue?.kind === "array"
