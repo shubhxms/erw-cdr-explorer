@@ -45,7 +45,9 @@ export function TornadoChart({
   }
 
   // Layout: label column (left) + bar area (center) + numeric column (right).
-  const labelW = 240;
+  // Cartograph CF runs wider than system-ui; the longest label
+  // ("Feedstock Ti (tracer mass fraction)") needs ~290px at 12px.
+  const labelW = 300;
   const numW = 80;
   const barAreaW = width - labelW - numW - 24;
   const centerX = labelW + barAreaW / 2;
