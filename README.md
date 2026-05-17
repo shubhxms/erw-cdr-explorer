@@ -1,8 +1,6 @@
 # EW CDR Checkpoint Explorer
 
-Interactive DAG visualization of the enhanced-weathering CDR calculation for **Alt Carbon's Darjeeling project** on the [Isometric registry](https://registry.isometric.com/supplier/spl_1J6EQFMYF1S00KDE#issuances). Every named intermediate in the chain is a node; click any node to inspect its distribution, edit inputs, and recompute in-browser.
-
-Specifically, this app reproduces the gross **CDR from weathering** figure for removal [rmv_1KH3W7FMH1S0J5R9](https://registry.isometric.com/removal/rmv_1KH3W7FMH1S0J5R9?tab=data-points) — independently computed `p16 = 4,703.71 tCO₂e` vs the registry-derived value `4,703.709 tCO₂e`.
+Interactive DAG viewer for the enhanced-weathering CDR calculation behind **Alt Carbon's Darjeeling project** on the [Isometric registry](https://registry.isometric.com/supplier/spl_1J6EQFMYF1S00KDE#issuances). Every named intermediate in the chain is a node; click any node to inspect its distribution, edit inputs, and recompute in-browser via Pyodide.
 
 ## Scope
 

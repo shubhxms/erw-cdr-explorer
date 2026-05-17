@@ -139,7 +139,10 @@ export function Histogram({
       plotRef.current?.destroy();
       plotRef.current = null;
     };
-  }, [bins, edges, width, height, xRange?.[0], xRange?.[1]]);
+    // Destructure xRange so the deps array is a flat list of primitives (the
+    // exhaustive-deps rule can't statically verify `xRange?.[0]`).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bins, edges, width, height, barColor, xRange?.[0], xRange?.[1]]);
 
   const total = bins.reduce((a, b) => a + b, 0) || 1;
   const tt = cursor.visible && cursor.binIdx >= 0 && cursor.binIdx < bins.length;
