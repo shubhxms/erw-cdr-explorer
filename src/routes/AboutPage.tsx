@@ -2,7 +2,7 @@ import { PageLayout } from "../components/PageLayout";
 
 export function AboutPage() {
   return (
-    <PageLayout title="EW CDR Checkpoint Explorer">
+    <PageLayout title="ERW CDR Checkpoint Explorer">
       <p style={{ marginTop: 0 }}>
         A browser viewer for{" "}
         <a
@@ -10,7 +10,7 @@ export function AboutPage() {
           target="_blank"
           rel="noreferrer"
         >
-          Alt Carbon's EW CDR removals
+          Alt Carbon's ERW CDR removals
         </a>{" "}
         on the Isometric registry. Every named intermediate of the
         tracer-corrected mass-balance chain (~71 nodes) is a clickable DAG

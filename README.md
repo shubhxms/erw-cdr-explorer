@@ -1,15 +1,14 @@
-# EW CDR Checkpoint Explorer
+# ERW CDR Checkpoint Explorer
 
-Interactive DAG viewer for the enhanced-weathering CDR calculation behind **Alt Carbon's Darjeeling project** on the [Isometric registry](https://registry.isometric.com/supplier/spl_1J6EQFMYF1S00KDE#issuances). Every named intermediate in the chain is a node; click any node to inspect its distribution, edit inputs, and recompute in-browser via Pyodide.
+Interactive DAG viewer for the enhanced rock weathering CDR calculation behind **Alt Carbon's Darjeeling project** on the [Isometric registry](https://registry.isometric.com/supplier/spl_1J6EQFMYF1S00KDE#issuances). Every named intermediate in the chain is a node; click any node to inspect its distribution, edit inputs, and recompute in-browser via Pyodide.
 
 ## Scope
 
 Only the soil-bootstrap + tracer-corrected mass-balance portion of the issuance is in scope. The final issued removal applies additional steps that this explorer does **not** model:
 
 - upstream activity emissions (flights, freight, spreading fuel, lab electricity)
-- weathering losses (strong acid weathering ≈ 508.75 tCO₂e, plant uptake ≈ 37.59 tCO₂e, counterfactual liming)
-- attribution factor (~36.87%)
-- downstream retention (river runoff 99.30%, ocean re-equilibration 78.80%)
+- weathering losses (strong acid weathering, plant uptake, counterfactual liming)
+- downstream retention (river runoff, ocean re-equilibration)
 
 ## Features
 
@@ -22,7 +21,7 @@ Only the soil-bootstrap + tracer-corrected mass-balance portion of the issuance 
 
 ## Stack
 
-Vite + React + TypeScript + React Router + @xyflow/react + dagre + Pyodide + hyparquet + uPlot + Zustand.
+Vite + React + TypeScript + React Router + @xyflow/react + Pyodide + hyparquet + uPlot + Zustand.
 
 ## Develop
 

@@ -1,5 +1,5 @@
 """
-EW CDR chain — Pyodide-side calculation.
+ERW CDR chain — Pyodide-side calculation.
 
 Wraps the real `isometric_calculation_library` calculation so the browser
 result matches the registry value (p16 ≈ 4703.709) bit-for-bit aside from

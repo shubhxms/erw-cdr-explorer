@@ -1,5 +1,5 @@
 /**
- * Registry of Alt Carbon's published EW CDR removals on the Isometric registry.
+ * Registry of Alt Carbon's published ERW CDR removals on the Isometric registry.
  * Each removal is reproduced by this explorer as a separate manifest +
  * checkpoint directory under /public/checkpoints/<removalId>/.
  *

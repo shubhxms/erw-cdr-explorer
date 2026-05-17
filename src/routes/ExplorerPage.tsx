@@ -67,7 +67,7 @@ export function ExplorerPage() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <strong style={{ fontSize: 14 }}>EW CDR Explorer</strong>
+          <strong style={{ fontSize: 14 }}>ERW CDR Explorer</strong>
           <RemovalSwitcher />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
